@@ -76,7 +76,7 @@ export function HubSidebar() {
                     role="button"
                     onClick={() => setActiveAgentId(agent.id)}
                     data-active={agent.id === activeAgentId || undefined}
-                    className="flex items-center w-full h-8 px-2 rounded-md cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active]:bg-sidebar-accent data-[active]:font-medium"
+                    className="flex items-center w-full h-8 px-2 rounded-md cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-active:font-medium"
                   >
                     <span className="flex-1 min-w-0 truncate font-mono text-xs">
                       {agent.id}
