@@ -2,8 +2,13 @@ import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { SkillsConfig } from "./skills/types.js";
 import type { ToolsConfig } from "./tools/policy.js";
 
+/** Controls how reasoning/thinking content blocks are handled */
+export type ReasoningMode = "off" | "on" | "stream";
+
 export type AgentRunResult = {
   text: string;
+  /** Extracted thinking/reasoning content (when reasoningMode !== "off") */
+  thinking?: string | undefined;
   error?: string | undefined;
 };
 
@@ -28,6 +33,8 @@ export type AgentOptions = {
   /** System prompt, if profileId is set will auto-construct from profile */
   systemPrompt?: string | undefined;
   thinkingLevel?: ThinkingLevel | undefined;
+  /** Controls how reasoning/thinking content is displayed: off, on, stream (default: stream) */
+  reasoningMode?: ReasoningMode | undefined;
   /** Command execution directory */
   cwd?: string | undefined;
   sessionId?: string | undefined;

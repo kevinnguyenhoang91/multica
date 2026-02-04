@@ -10,3 +10,14 @@ export function extractText(message: AgentMessage | undefined): string {
     .map((c) => c.text ?? "")
     .join("");
 }
+
+/** Extract thinking/reasoning content from an AgentMessage */
+export function extractThinking(message: AgentMessage | undefined): string {
+  if (!message || typeof message !== "object" || !("content" in message)) return "";
+  const content = (message as { content?: Array<{ type: string; thinking?: string }> }).content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((c) => c.type === "thinking")
+    .map((c) => c.thinking ?? "")
+    .join("");
+}

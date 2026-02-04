@@ -1,10 +1,13 @@
 import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
-import { colors, createSpinner } from "./colors.js";
-import { extractText } from "../extract-text.js";
+import { colors, createSpinner, dim } from "./colors.js";
+import { extractText, extractThinking } from "../extract-text.js";
+import type { ReasoningMode } from "../types.js";
 
 export type AgentOutputState = {
   lastAssistantText: string;
+  lastAssistantThinking: string;
   printedLen: number;
+  printedThinkingLen: number;
   streaming: boolean;
 };
 
@@ -171,10 +174,14 @@ export function formatResultSummary(name: string, result: unknown): string {
 export function createAgentOutput(params: {
   stdout: NodeJS.WritableStream;
   stderr: NodeJS.WritableStream;
+  reasoningMode?: ReasoningMode;
 }): AgentOutput {
+  const reasoningMode = params.reasoningMode ?? "stream";
   const state: AgentOutputState = {
     lastAssistantText: "",
+    lastAssistantThinking: "",
     printedLen: 0,
+    printedThinkingLen: 0,
     streaming: false,
   };
 
@@ -194,10 +201,19 @@ export function createAgentOutput(params: {
           }
           state.streaming = true;
           state.printedLen = 0;
+          state.printedThinkingLen = 0;
           const text = extractText(msg);
           if (text.length > 0) {
             params.stdout.write(text);
             state.printedLen = text.length;
+          }
+          // Stream thinking content in real-time
+          if (reasoningMode === "stream") {
+            const thinking = extractThinking(msg);
+            if (thinking.length > 0) {
+              params.stderr.write(dim(thinking));
+              state.printedThinkingLen = thinking.length;
+            }
           }
         }
         break;
@@ -209,6 +225,14 @@ export function createAgentOutput(params: {
           if (text.length > state.printedLen) {
             params.stdout.write(text.slice(state.printedLen));
             state.printedLen = text.length;
+          }
+          // Stream thinking content in real-time
+          if (reasoningMode === "stream") {
+            const thinking = extractThinking(msg);
+            if (thinking.length > state.printedThinkingLen) {
+              params.stderr.write(dim(thinking.slice(state.printedThinkingLen)));
+              state.printedThinkingLen = thinking.length;
+            }
           }
         }
         break;
@@ -224,6 +248,21 @@ export function createAgentOutput(params: {
           if (state.streaming) params.stdout.write("\n");
           state.streaming = false;
           state.lastAssistantText = text;
+
+          // Extract and store thinking content (skip when off)
+          const thinking = reasoningMode !== "off" ? extractThinking(msg) : "";
+          state.lastAssistantThinking = thinking;
+
+          // Show thinking at end for "on" mode
+          if (reasoningMode === "on" && thinking) {
+            params.stderr.write(`\n${dim("--- Thinking ---")}\n`);
+            params.stderr.write(dim(thinking));
+            params.stderr.write(`\n${dim("--- End Thinking ---")}\n`);
+          }
+          // Finish streaming thinking with a newline
+          if (reasoningMode === "stream" && state.printedThinkingLen > 0) {
+            params.stderr.write("\n");
+          }
         }
         break;
       }

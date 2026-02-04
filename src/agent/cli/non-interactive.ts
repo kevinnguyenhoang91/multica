@@ -9,6 +9,7 @@ type CliOptions = {
   baseUrl?: string | undefined;
   system?: string | undefined;
   thinking?: string | undefined;
+  reasoning?: string | undefined;
   cwd?: string | undefined;
   session?: string | undefined;
   debug?: boolean | undefined;
@@ -31,6 +32,7 @@ function printUsage() {
   console.log("  --base-url URL   Custom base URL for the provider");
   console.log("  --system TEXT    System prompt (ignored if --profile is set)");
   console.log("  --thinking LEVEL Thinking level");
+  console.log("  --reasoning MODE Reasoning display mode (off, on, stream)");
   console.log("  --cwd DIR        Working directory for commands");
   console.log("  --session ID     Session ID for conversation persistence");
   console.log("  --debug          Enable debug logging");
@@ -85,6 +87,10 @@ function parseArgs(argv: string[]) {
     }
     if (arg === "--thinking") {
       opts.thinking = args.shift();
+      continue;
+    }
+    if (arg === "--reasoning") {
+      opts.reasoning = args.shift();
       continue;
     }
     if (arg === "--cwd") {
@@ -171,6 +177,7 @@ async function main() {
     baseUrl: opts.baseUrl,
     systemPrompt: opts.system,
     thinkingLevel: opts.thinking as any,
+    reasoningMode: opts.reasoning as any,
     cwd: opts.cwd,
     sessionId: opts.session,
     debug: opts.debug,

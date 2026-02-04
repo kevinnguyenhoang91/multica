@@ -12,6 +12,7 @@ type CliOptions = {
   model?: string | undefined;
   system?: string | undefined;
   thinking?: string | undefined;
+  reasoning?: string | undefined;
   cwd?: string | undefined;
   session?: string | undefined;
   help?: boolean | undefined;
@@ -35,6 +36,7 @@ function printUsage() {
   console.log(`  ${yellow("--model")} NAME     Model name`);
   console.log(`  ${yellow("--system")} TEXT    System prompt (ignored if --profile is set)`);
   console.log(`  ${yellow("--thinking")} LEVEL Thinking level`);
+  console.log(`  ${yellow("--reasoning")} MODE Reasoning display mode (off, on, stream)`);
   console.log(`  ${yellow("--cwd")} DIR        Working directory for commands`);
   console.log(`  ${yellow("--session")} ID     Session ID to resume`);
   console.log(`  ${yellow("--help")}, -h       Show this help`);
@@ -74,6 +76,10 @@ function parseArgs(argv: string[]) {
     }
     if (arg === "--thinking") {
       opts.thinking = args.shift();
+      continue;
+    }
+    if (arg === "--reasoning") {
+      opts.reasoning = args.shift();
       continue;
     }
     if (arg === "--cwd") {
@@ -343,6 +349,7 @@ class InteractiveCLI {
       model: this.opts.model,
       systemPrompt: this.opts.system,
       thinkingLevel: this.opts.thinking as AgentOptions["thinkingLevel"],
+      reasoningMode: this.opts.reasoning as AgentOptions["reasoningMode"],
       cwd: this.opts.cwd,
       sessionId,
     });

@@ -37,6 +37,8 @@ export interface ProfileConfig {
   model?: string;
   /** Default thinking level */
   thinkingLevel?: string;
+  /** Reasoning mode: off, on, stream */
+  reasoningMode?: "off" | "on" | "stream" | undefined;
 }
 
 /** Agent Profile configuration */

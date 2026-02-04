@@ -37,4 +37,5 @@ export {
   type StreamMessageEvent,
   type StreamToolEvent,
   extractTextFromEvent,
+  extractThinkingFromEvent,
 } from "./stream";

@@ -1,6 +1,6 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { v7 as uuidv7 } from "uuid";
-import type { AgentOptions, AgentRunResult } from "./types.js";
+import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools } from "./tools.js";
 import {
@@ -69,12 +69,13 @@ export function isRotatableError(reason: AuthProfileFailureReason): boolean {
 
 export class Agent {
   private readonly agent: PiAgentCore;
-  private readonly output;
+  private output;
   private readonly session: SessionManager;
   private readonly profile?: ProfileManager;
   private readonly skillManager?: SkillManager;
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
+  private reasoningMode: ReasoningMode;
   private toolsOptions: AgentOptions;
   private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
@@ -94,8 +95,9 @@ export class Agent {
   constructor(options: AgentOptions = {}) {
     const stdout = options.logger?.stdout ?? process.stdout;
     this.stderr = options.logger?.stderr ?? process.stderr;
-    this.output = createAgentOutput({ stdout, stderr: this.stderr });
     this.debug = options.debug ?? false;
+    this.reasoningMode = options.reasoningMode ?? "stream";
+    this.output = createAgentOutput({ stdout, stderr: this.stderr, reasoningMode: this.reasoningMode });
 
     // Resolve provider and model from options > env vars > defaults
     const defaultProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
@@ -254,6 +256,18 @@ export class Agent {
       this.agent.setThinkingLevel(options.thinkingLevel);
     }
 
+    // Resolve reasoningMode: options > profile config > storedMeta > default "stream"
+    if (!options.reasoningMode) {
+      const profileReasoningMode = this.profile?.getProfile()?.config?.reasoningMode;
+      const metaReasoningMode = storedMeta?.reasoningMode as ReasoningMode | undefined;
+      const resolved = profileReasoningMode ?? metaReasoningMode ?? "stream";
+      if (resolved !== this.reasoningMode) {
+        this.reasoningMode = resolved;
+        // Re-create output with correct reasoningMode
+        this.output = createAgentOutput({ stdout, stderr: this.stderr, reasoningMode: this.reasoningMode });
+      }
+    }
+
     this.agent.setModel(model);
 
     // Save original tools config from options (for later merging during reload)
@@ -288,6 +302,7 @@ export class Agent {
       provider: this.agent.state.model?.provider,
       model: this.agent.state.model?.id,
       thinkingLevel: this.agent.state.thinkingLevel,
+      reasoningMode: this.reasoningMode,
       contextWindowTokens: this.contextWindowGuard.tokens,
     });
 
@@ -384,7 +399,10 @@ export class Agent {
       markAuthProfileGood(this.resolvedProvider, this.currentProfileId);
     }
 
-    return { text: this.output.state.lastAssistantText, error: this.agent.state.error };
+    const thinking = this.reasoningMode !== "off"
+      ? this.output.state.lastAssistantThinking || undefined
+      : undefined;
+    return { text: this.output.state.lastAssistantText, thinking, error: this.agent.state.error };
   }
 
   /**

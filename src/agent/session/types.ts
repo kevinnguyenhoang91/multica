@@ -4,6 +4,8 @@ export type SessionMeta = {
   provider?: string;
   model?: string;
   thinkingLevel?: string;
+  /** Reasoning mode: off, on, stream */
+  reasoningMode?: string;
   /** Context window token 数 */
   contextWindowTokens?: number;
 };

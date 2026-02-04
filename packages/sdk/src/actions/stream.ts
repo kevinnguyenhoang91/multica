@@ -12,7 +12,7 @@ export interface StreamMessageEvent {
   message: {
     id?: string;
     role: string;
-    content?: Array<{ type: string; text?: string }>;
+    content?: Array<{ type: string; text?: string; thinking?: string }>;
   };
   assistantMessageEvent?: unknown;
 }
@@ -45,5 +45,15 @@ export function extractTextFromEvent(event: StreamMessageEvent): string {
   return content
     .filter((c) => c.type === "text")
     .map((c) => c.text ?? "")
+    .join("");
+}
+
+/** Extract thinking/reasoning content from an AgentMessage content array */
+export function extractThinkingFromEvent(event: StreamMessageEvent): string {
+  const content = event.message?.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((c) => c.type === "thinking")
+    .map((c) => c.thinking ?? "")
     .join("");
 }

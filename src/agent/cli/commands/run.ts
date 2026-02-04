@@ -7,6 +7,7 @@
  */
 
 import { Agent } from "../../runner.js";
+import type { AgentOptions } from "../../types.js";
 import type { ToolsConfig } from "../../tools/policy.js";
 import { cyan, yellow, dim } from "../colors.js";
 
@@ -18,6 +19,7 @@ type RunOptions = {
   baseUrl?: string;
   system?: string;
   thinking?: string;
+  reasoning?: string;
   cwd?: string;
   session?: string;
   debug?: boolean;
@@ -40,6 +42,7 @@ ${cyan("Options:")}
   ${yellow("--base-url")} URL      Custom base URL for provider
   ${yellow("--system")} TEXT       System prompt (ignored if --profile set)
   ${yellow("--thinking")} LEVEL    Thinking level
+  ${yellow("--reasoning")} MODE   Reasoning display mode (off, on, stream)
   ${yellow("--cwd")} DIR           Working directory
   ${yellow("--session")} ID        Session ID for persistence
   ${yellow("--debug")}             Enable debug logging
@@ -104,6 +107,10 @@ function parseArgs(argv: string[]): { opts: RunOptions; prompt: string } {
     }
     if (arg === "--thinking") {
       opts.thinking = args.shift();
+      continue;
+    }
+    if (arg === "--reasoning") {
+      opts.reasoning = args.shift();
       continue;
     }
     if (arg === "--cwd") {
@@ -192,6 +199,7 @@ export async function runCommand(args: string[]): Promise<void> {
     baseUrl: opts.baseUrl,
     systemPrompt: opts.system,
     thinkingLevel: opts.thinking as any,
+    reasoningMode: opts.reasoning as AgentOptions["reasoningMode"],
     cwd: opts.cwd,
     sessionId: opts.session,
     debug: opts.debug,
