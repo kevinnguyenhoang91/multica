@@ -1,7 +1,7 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
-import type { MulticaEvent } from "./events.js";
+import type { MulticaEvent, CompactionEndEvent } from "./events.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools, type ResolveToolsOptions } from "./tools.js";
 import {
@@ -163,11 +163,14 @@ export class Agent {
         : 0;
     }
 
-    this.agent = new PiAgentCore(
-      this.currentApiKey
-        ? { getApiKey: (_provider: string) => this.currentApiKey! }
-        : {},
-    );
+    this.agent = new PiAgentCore({
+      getApiKey: (_provider: string) => {
+        if (!this.currentApiKey) {
+          throw new Error(`No API key configured for provider: ${this.resolvedProvider}`);
+        }
+        return this.currentApiKey;
+      },
+    });
 
     // Load Agent Profile (if profileId is specified)
     // Every Agent should have a Profile for memory, tools config, and other settings
@@ -356,6 +359,11 @@ export class Agent {
     }
   }
 
+  /** Emit an error event through the subscriber mechanism */
+  emitError(message: string): void {
+    this.emitMulticaEvent({ type: "agent_error", message });
+  }
+
   async run(prompt: string): Promise<AgentRunResult> {
     // Run-level mutex: prevents concurrent run/runInternal from mis-tagging messages
     return this.withRunMutex(() => this._run(prompt));
@@ -401,6 +409,14 @@ export class Agent {
   private async _run(prompt: string): Promise<AgentRunResult> {
     await this.ensureInitialized();
     this.output.state.lastAssistantText = "";
+
+    // Early validation: check API key before calling PiAgentCore.prompt(),
+    // because getApiKey errors thrown inside PiAgentCore's internal async
+    // context result in UnhandledPromiseRejection instead of propagating.
+    if (!this.currentApiKey) {
+      const errorMsg = `No API key configured for provider: ${this.resolvedProvider}. Please configure a provider in Agent Settings.`;
+      return { text: "", error: errorMsg };
+    }
 
     const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
     let lastError: unknown;
@@ -509,14 +525,15 @@ export class Agent {
       if (result?.kept) {
         this.agent.replaceMessages(result.kept);
       }
-      this.emitMulticaEvent({
+      const endEvent: CompactionEndEvent = {
         type: "compaction_end",
         removed: result?.removedCount ?? 0,
         kept: result?.kept.length ?? messages.length,
         tokensRemoved: result?.tokensRemoved,
         tokensKept: result?.tokensKept,
         reason: result?.reason ?? "tokens",
-      });
+      };
+      this.emitMulticaEvent(endEvent);
     } catch (err) {
       throw err;
     }

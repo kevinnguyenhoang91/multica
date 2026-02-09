@@ -62,11 +62,14 @@ export class AsyncAgent {
         // Normal text is delivered via message_end event; only handle errors here
         if (result.error) {
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
+          this.agent.emitError(result.error);
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
+        // Also emit through subscriber mechanism so IPC listeners receive the error
+        this.agent.emitError(message);
       })
       .finally(() => {
         this.pendingWrites = Math.max(0, this.pendingWrites - 1);

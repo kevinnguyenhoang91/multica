@@ -38,6 +38,7 @@ export {
   type CompactionEvent,
   type CompactionStartEvent,
   type CompactionEndEvent,
+  type AgentErrorEvent,
   type ContentBlock,
   type TextContent,
   type ThinkingContent,

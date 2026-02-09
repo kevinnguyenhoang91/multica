@@ -281,6 +281,17 @@ export function registerHubIpcHandlers(): void {
         return
       }
 
+      // Agent error events: forward so the UI can display them
+      if (event.type === 'agent_error') {
+        safeLog(`[IPC] Sending agent_error event to renderer: ${(event as { message: string }).message}`)
+        mainWindowRef.webContents.send('localChat:event', {
+          agentId,
+          streamId: null,
+          event,
+        })
+        return
+      }
+
       // Filter events same as Hub.consumeAgent()
       const maybeMessage = (event as { message?: { role?: string } }).message
       const isAssistantMessage = maybeMessage?.role === 'assistant'

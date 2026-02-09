@@ -21,10 +21,16 @@ export type CompactionEndEvent = {
   type: "compaction_end";
   removed: number;
   kept: number;
-  tokensRemoved?: number;
-  tokensKept?: number;
+  tokensRemoved?: number | undefined;
+  tokensKept?: number | undefined;
   reason: "count" | "tokens" | "summary" | "pruning";
 };
 
+/** Emitted when an agent encounters an error during execution */
+export type AgentErrorEvent = {
+  type: "agent_error";
+  message: string;
+};
+
 /** Union of all Multica-specific events */
-export type MulticaEvent = CompactionStartEvent | CompactionEndEvent;
+export type MulticaEvent = CompactionStartEvent | CompactionEndEvent | AgentErrorEvent;

@@ -5,6 +5,7 @@ import type {
   ExecApprovalRequestPayload,
   ApprovalDecision,
   AgentMessageItem,
+  AgentErrorEvent,
 } from '@multica/sdk'
 import { DEFAULT_MESSAGES_LIMIT } from '@multica/sdk'
 
@@ -55,6 +56,14 @@ export function useLocalChat() {
       // Cast IPC event to StreamPayload (same shape: { agentId, streamId, event })
       const payload = data as unknown as StreamPayload
       if (!payload.event) return
+
+      // Handle agent error events
+      if (payload.event.type === 'agent_error') {
+        const errorEvent = payload.event as AgentErrorEvent
+        chatRef.current.setError({ code: 'AGENT_ERROR', message: errorEvent.message })
+        setIsLoading(false)
+        return
+      }
 
       chatRef.current.handleStream(payload)
       if (payload.event.type === 'message_start') setIsLoading(true)
@@ -133,6 +142,10 @@ export function useLocalChat() {
     [],
   )
 
+  const clearError = useCallback(() => {
+    chatRef.current.setError(null)
+  }, [])
+
   return {
     agentId,
     initError,
@@ -147,5 +160,6 @@ export function useLocalChat() {
     sendMessage,
     loadMore,
     resolveApproval,
+    clearError,
   }
 }
