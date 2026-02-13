@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isAuthenticated } from '@/lib/auth'
 
@@ -10,19 +10,20 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter()
-  const [isChecking, setIsChecking] = useState(true)
-  const [isAuthed, setIsAuthed] = useState(false)
+  // Initialize state synchronously to avoid cascading renders
+  const [authState] = useState(() => {
+    if (typeof window === 'undefined') return { checking: true, authed: false }
+    const authed = isAuthenticated()
+    return { checking: false, authed }
+  })
 
-  useEffect(() => {
-    if (isAuthenticated()) {
-      setIsAuthed(true)
-    } else {
+  useLayoutEffect(() => {
+    if (!authState.checking && !authState.authed) {
       router.replace('/login')
     }
-    setIsChecking(false)
-  }, [router])
+  }, [authState, router])
 
-  if (isChecking) {
+  if (authState.checking) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
@@ -30,7 +31,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     )
   }
 
-  if (!isAuthed) {
+  if (!authState.authed) {
     return null
   }
 
