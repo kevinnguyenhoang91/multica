@@ -21,13 +21,22 @@ COPY packages/utils/package.json ./packages/utils/
 
 RUN pnpm install --frozen-lockfile --filter @multica/gateway...
 
-# Stage 2: runtime
+# Stage 2: build workspace packages that export from dist/
+FROM deps AS build
+COPY packages/types/ ./packages/types/
+COPY packages/utils/ ./packages/utils/
+COPY packages/core/ ./packages/core/
+RUN pnpm --filter @multica/types build && \
+    pnpm --filter @multica/utils build && \
+    pnpm --filter @multica/core build
+
+# Stage 3: runtime
 FROM node:22-alpine
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 WORKDIR /app
 
-# Copy pnpm structure + node_modules (includes hoisted deps and workspace symlinks)
-COPY --from=deps /app ./
+# Copy pnpm structure + node_modules + built dist/ artifacts
+COPY --from=build /app ./
 
 # Copy workspace packages needed at runtime (raw .ts source, resolved by tsx)
 COPY packages/sdk/ ./packages/sdk/
