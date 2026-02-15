@@ -6,9 +6,11 @@
  *   echo "prompt" | multica run
  */
 
+import { join } from "node:path";
 import { Agent } from "@multica/core";
 import type { AgentOptions } from "@multica/core";
 import type { ToolsConfig } from "@multica/core";
+import { DATA_DIR } from "@multica/utils";
 import { cyan, yellow, dim } from "../colors.js";
 
 type RunOptions = {
@@ -23,6 +25,7 @@ type RunOptions = {
   cwd?: string | undefined;
   session?: string | undefined;
   debug?: boolean;
+  runLog?: boolean;
   toolsAllow?: string[];
   toolsDeny?: string[];
   help?: boolean;
@@ -45,6 +48,7 @@ ${cyan("Options:")}
   ${yellow("--cwd")} DIR           Working directory
   ${yellow("--session")} ID        Session ID for persistence
   ${yellow("--debug")}             Enable debug logging
+  ${yellow("--run-log")}           Enable structured run logging (run-log.jsonl)
   ${yellow("--help")}, -h          Show this help
 
 ${cyan("Tools Configuration:")}
@@ -123,6 +127,10 @@ function parseArgs(argv: string[]): { opts: RunOptions; prompt: string } {
       opts.debug = true;
       continue;
     }
+    if (arg === "--run-log") {
+      opts.runLog = true;
+      continue;
+    }
     if (arg === "--tools-allow") {
       const value = args.shift();
       opts.toolsAllow = value?.split(",").map((s) => s.trim()) ?? [];
@@ -182,6 +190,8 @@ export async function runCommand(args: string[]): Promise<void> {
     }
   }
 
+  const enableRunLog = opts.runLog || !!process.env.MULTICA_RUN_LOG;
+
   const agent = new Agent({
     profileId: opts.profile,
     provider: opts.provider,
@@ -194,12 +204,18 @@ export async function runCommand(args: string[]): Promise<void> {
     cwd: opts.cwd,
     sessionId: opts.session,
     debug: opts.debug,
+    enableRunLog,
     tools: toolsConfig,
   });
+
+  const sessionDir = join(DATA_DIR, "sessions", agent.sessionId);
 
   // If it's a newly created session, notify user of sessionId
   if (!opts.session) {
     console.error(`[session: ${agent.sessionId}]`);
+  }
+  if (enableRunLog) {
+    console.error(`[session-dir: ${sessionDir}]`);
   }
 
   const result = await agent.run(finalPrompt);
