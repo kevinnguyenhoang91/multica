@@ -15,8 +15,12 @@ const linkify = new LinkifyIt()
 const FILE_PATH_REGEX =
   /(?:^|[\s([{<])((\/|~\/|\.\/)[\w\-./@]+\.(?:ts|tsx|js|jsx|mjs|cjs|md|json|yaml|yml|py|go|rs|css|scss|less|html|htm|txt|log|sh|bash|zsh|swift|kt|java|c|cpp|h|hpp|rb|php|xml|toml|ini|cfg|conf|env|sql|graphql|vue|svelte|astro|prisma|dockerfile|makefile|gitignore))(?=[\s)\]}.,;:!?>]|$)/gi
 
+// Issue identifier regex - detects PREFIX-NUMBER patterns (e.g. MUL-18, JIA-5)
+// 2-5 uppercase letters + hyphen + digits, with word boundary checks
+const ISSUE_REF_REGEX = /(?:^|[\s([{<])([A-Z]{2,5}-\d+)(?=[\s)\]}.,;:!?>]|$)/g
+
 interface DetectedLink {
-  type: 'url' | 'email' | 'file'
+  type: 'url' | 'email' | 'file' | 'issue'
   text: string
   url: string
   start: number
@@ -161,6 +165,31 @@ export function detectLinks(text: string): DetectedLink[] {
     })
   }
 
+  // 3. Detect issue references (PREFIX-NUMBER)
+  ISSUE_REF_REGEX.lastIndex = 0
+  let issueMatch
+  while ((issueMatch = ISSUE_REF_REGEX.exec(text)) !== null) {
+    const identifier = issueMatch[1]
+    if (!identifier) continue
+
+    const fullMatch = issueMatch[0]
+    const identifierOffset = fullMatch.indexOf(identifier)
+    const start = issueMatch.index + identifierOffset
+
+    // Check for overlaps with existing matches
+    const refRange = { start, end: start + identifier.length }
+    const overlaps = links.some((link) => rangesOverlap(refRange, link))
+    if (overlaps) continue
+
+    links.push({
+      type: 'issue',
+      text: identifier,
+      url: `issue://${identifier}`,
+      start,
+      end: start + identifier.length
+    })
+  }
+
   // Sort by position
   return links.sort((a, b) => a.start - b.start)
 }
@@ -171,7 +200,7 @@ export function detectLinks(text: string): DetectedLink[] {
  */
 export function preprocessLinks(text: string): string {
   // Quick check - if no potential links, return early
-  if (!linkify.pretest(text) && !/[~/.]\//.test(text)) {
+  if (!linkify.pretest(text) && !/[~/.]\//.test(text) && !/[A-Z]{2,5}-\d+/.test(text)) {
     return text
   }
 
@@ -211,5 +240,5 @@ export function preprocessLinks(text: string): string {
  * Useful for optimization - skip preprocessing if no links present
  */
 export function hasLinks(text: string): boolean {
-  return linkify.pretest(text) || /[~/.]\/[\w]/.test(text)
+  return linkify.pretest(text) || /[~/.]\/[\w]/.test(text) || /[A-Z]{2,5}-\d+/.test(text)
 }

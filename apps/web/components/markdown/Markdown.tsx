@@ -41,6 +41,10 @@ export interface MarkdownProps {
    * Callback when a file path is clicked
    */
   onFileClick?: (path: string) => void
+  /**
+   * Callback when an issue reference is clicked (e.g. MUL-18)
+   */
+  onIssueClick?: (identifier: string) => void
 }
 
 // File path detection regex - matches paths starting with /, ~/, or ./
@@ -53,7 +57,8 @@ const FILE_PATH_REGEX =
 function createComponents(
   mode: RenderMode,
   onUrlClick?: (url: string) => void,
-  onFileClick?: (path: string) => void
+  onFileClick?: (path: string) => void,
+  onIssueClick?: (identifier: string) => void
 ): Partial<Components> {
   const baseComponents: Partial<Components> = {
     // Links: Make clickable with callbacks, or render as mention
@@ -64,6 +69,23 @@ function createComponents(
           <span
             className="text-primary font-medium"
             style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', padding: '0 0.2em', borderRadius: 'calc(var(--radius) * 0.5)' }}
+          >
+            {children}
+          </span>
+        )
+      }
+
+      // Issue reference links: issue://PREFIX-NUMBER
+      if (href?.startsWith('issue://')) {
+        const identifier = href.replace('issue://', '')
+        return (
+          <span
+            className="text-primary font-medium cursor-pointer hover:underline"
+            style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', padding: '0 0.2em', borderRadius: 'calc(var(--radius) * 0.5)' }}
+            onClick={(e) => {
+              e.preventDefault()
+              onIssueClick?.(identifier)
+            }}
           >
             {children}
           </span>
@@ -269,11 +291,12 @@ export function Markdown({
   mode = 'minimal',
   className,
   onUrlClick,
-  onFileClick
+  onFileClick,
+  onIssueClick
 }: MarkdownProps): React.JSX.Element {
   const components = React.useMemo(
-    () => createComponents(mode, onUrlClick, onFileClick),
-    [mode, onUrlClick, onFileClick]
+    () => createComponents(mode, onUrlClick, onFileClick, onIssueClick),
+    [mode, onUrlClick, onFileClick, onIssueClick]
   )
 
   // Preprocess to convert raw URLs and file paths to markdown links

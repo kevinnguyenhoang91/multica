@@ -314,6 +314,18 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     }
   };
 
+  const handleIssueClick = useCallback(
+    (identifier: string) => {
+      const target = allIssues.find((i) => i.identifier === identifier);
+      if (target) {
+        router.push(`/issues/${target.id}`);
+      } else {
+        toast.error(`Issue ${identifier} not found`);
+      }
+    },
+    [allIssues, router],
+  );
+
   const handleUpdateField = useCallback(
     (updates: Partial<UpdateIssueRequest>) => {
       if (!issue) return;
@@ -917,6 +929,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         onReply={handleSubmitReply}
                         onEdit={handleEditComment}
                         onDelete={handleDeleteComment}
+                        onIssueClick={handleIssueClick}
                       />
                     );
                   }

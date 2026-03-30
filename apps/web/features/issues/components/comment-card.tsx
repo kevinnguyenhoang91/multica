@@ -31,6 +31,7 @@ interface CommentCardProps {
   onReply: (parentId: string, content: string) => Promise<void>;
   onEdit: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => void;
+  onIssueClick?: (identifier: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,11 +43,13 @@ function CommentRow({
   currentUserId,
   onEdit,
   onDelete,
+  onIssueClick,
 }: {
   entry: TimelineEntry;
   currentUserId?: string;
   onEdit: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => void;
+  onIssueClick?: (identifier: string) => void;
 }) {
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
@@ -137,7 +140,7 @@ function CommentRow({
         </form>
       ) : (
         <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
-          <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+          <Markdown mode="minimal" onIssueClick={onIssueClick}>{entry.content ?? ""}</Markdown>
         </div>
       )}
     </div>
@@ -155,6 +158,7 @@ function CommentCard({
   onReply,
   onEdit,
   onDelete,
+  onIssueClick,
 }: CommentCardProps) {
   // Collect all nested replies recursively into a flat list
   const allNestedReplies: TimelineEntry[] = [];
@@ -176,6 +180,7 @@ function CommentCard({
           currentUserId={currentUserId}
           onEdit={onEdit}
           onDelete={onDelete}
+          onIssueClick={onIssueClick}
         />
       </div>
 
@@ -187,6 +192,7 @@ function CommentCard({
             currentUserId={currentUserId}
             onEdit={onEdit}
             onDelete={onDelete}
+            onIssueClick={onIssueClick}
           />
         </div>
       ))}
