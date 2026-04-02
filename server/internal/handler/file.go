@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,31 +17,6 @@ import (
 )
 
 const maxUploadSize = 10 << 20 // 10 MB
-
-// Allowed MIME type prefixes and exact types for uploads.
-var allowedContentTypes = map[string]bool{
-	"image/png":        true,
-	"image/jpeg":       true,
-	"image/gif":        true,
-	"image/webp":       true,
-	"image/svg+xml":    true,
-	"application/pdf":  true,
-	"text/plain":       true,
-	"text/csv":         true,
-	"application/json": true,
-	"video/mp4":        true,
-	"video/webm":       true,
-	"audio/mpeg":       true,
-	"audio/wav":        true,
-	"application/zip":  true,
-}
-
-func isContentTypeAllowed(ct string) bool {
-	// Normalize: take only the media type, strip parameters like charset.
-	ct = strings.TrimSpace(strings.SplitN(ct, ";", 2)[0])
-	ct = strings.ToLower(ct)
-	return allowedContentTypes[ct]
-}
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -148,10 +122,6 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	contentType := http.DetectContentType(buf[:n])
-	if !isContentTypeAllowed(contentType) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("file type not allowed: %s", contentType))
-		return
-	}
 	// Seek back so the full file is uploaded.
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read file")
