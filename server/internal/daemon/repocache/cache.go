@@ -194,7 +194,8 @@ func (c *Cache) CreateWorktree(params WorktreeParams) (*WorktreeResult, error) {
 	// If worktree already exists (reused environment from a prior task),
 	// update it to the latest remote code instead of creating a new one.
 	if isGitWorktree(worktreePath) {
-		if err := updateExistingWorktree(worktreePath, branchName, baseRef); err != nil {
+		actualBranch, err := updateExistingWorktree(worktreePath, branchName, baseRef)
+		if err != nil {
 			return nil, fmt.Errorf("update existing worktree: %w", err)
 		}
 
@@ -205,13 +206,13 @@ func (c *Cache) CreateWorktree(params WorktreeParams) (*WorktreeResult, error) {
 		c.logger.Info("repo checkout: existing worktree updated",
 			"url", params.RepoURL,
 			"path", worktreePath,
-			"branch", branchName,
+			"branch", actualBranch,
 			"base", baseRef,
 		)
 
 		return &WorktreeResult{
 			Path:       worktreePath,
-			BranchName: branchName,
+			BranchName: actualBranch,
 		}, nil
 	}
 
@@ -264,44 +265,40 @@ func isGitWorktree(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// updateExistingWorktree fetches the latest remote refs and checks out a new
-// branch from the remote default branch. This brings the worktree up to date
-// with the remote without losing the previous task's branch.
-func updateExistingWorktree(worktreePath, branchName, remoteDefault string) error {
-	// Fetch latest remote refs into the worktree.
-	fetchCmd := exec.Command("git", "-C", worktreePath, "fetch", "origin")
-	if out, err := fetchCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git fetch origin: %s: %w", strings.TrimSpace(string(out)), err)
-	}
-
+// updateExistingWorktree resets the worktree to a clean state and checks out a
+// new branch from the default branch. The caller is responsible for fetching
+// the bare cache beforehand (worktrees share the same object store).
+// Returns the actual branch name used (may differ from input on collision).
+func updateExistingWorktree(worktreePath, branchName, baseRef string) (string, error) {
 	// Discard any leftover uncommitted changes from the previous task.
 	resetCmd := exec.Command("git", "-C", worktreePath, "reset", "--hard")
 	if out, err := resetCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git reset --hard: %s: %w", strings.TrimSpace(string(out)), err)
+		return "", fmt.Errorf("git reset --hard: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 
 	// Clean untracked files (e.g. build artifacts from previous task).
 	cleanCmd := exec.Command("git", "-C", worktreePath, "clean", "-fd")
 	if out, err := cleanCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git clean -fd: %s: %w", strings.TrimSpace(string(out)), err)
+		return "", fmt.Errorf("git clean -fd: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 
-	// Create a new branch from the latest remote default branch and switch to it.
-	ref := "origin/" + remoteDefault
-	checkoutCmd := exec.Command("git", "-C", worktreePath, "checkout", "-b", branchName, ref)
+	// Create a new branch from the latest default branch and switch to it.
+	// Use baseRef directly (not origin/baseRef) — the bare clone's fetch refspec
+	// maps remote branches to local refs, so remote-tracking refs may not exist.
+	checkoutCmd := exec.Command("git", "-C", worktreePath, "checkout", "-b", branchName, baseRef)
 	if out, err := checkoutCmd.CombinedOutput(); err != nil {
 		// Branch name collision: append timestamp and retry once.
 		if strings.Contains(string(out), "already exists") {
 			branchName = fmt.Sprintf("%s-%d", branchName, time.Now().Unix())
-			checkoutCmd = exec.Command("git", "-C", worktreePath, "checkout", "-b", branchName, ref)
+			checkoutCmd = exec.Command("git", "-C", worktreePath, "checkout", "-b", branchName, baseRef)
 			if out2, err2 := checkoutCmd.CombinedOutput(); err2 != nil {
-				return fmt.Errorf("git checkout -b (retry): %s: %w", strings.TrimSpace(string(out2)), err2)
+				return "", fmt.Errorf("git checkout -b (retry): %s: %w", strings.TrimSpace(string(out2)), err2)
 			}
-			return nil
+			return branchName, nil
 		}
-		return fmt.Errorf("git checkout -b: %s: %w", strings.TrimSpace(string(out)), err)
+		return "", fmt.Errorf("git checkout -b: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	return nil
+	return branchName, nil
 }
 
 // getRemoteDefaultBranch returns the default branch ref for a bare repo.
