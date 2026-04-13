@@ -120,7 +120,7 @@ export function PropertyPicker({
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
-                setHighlightedIndex(-1);
+                setHighlightedIndex(0);
                 onSearchChange?.(e.target.value);
               }}
               onKeyDown={handleKeyDown}
