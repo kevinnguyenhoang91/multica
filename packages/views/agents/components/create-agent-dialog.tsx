@@ -78,7 +78,7 @@ export function CreateAgentDialog({
     }
   }, [filteredRuntimes, selectedRuntimeId]);
 
-  const selectedRuntime = filteredRuntimes.find((d) => d.id === selectedRuntimeId) ?? null;
+  const selectedRuntime = runtimes.find((d) => d.id === selectedRuntimeId) ?? null;
 
   const handleSubmit = async () => {
     if (!name.trim() || !selectedRuntime) return;
@@ -221,13 +221,10 @@ export function CreateAgentDialog({
                       </span>
                     )}
                   </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                    {selectedRuntime ? (
-                      (() => {
-                        const owner = getOwnerMember(selectedRuntime.owner_id);
-                        return owner ? owner.name : selectedRuntime.device_info;
-                      })()
-                    ) : "Register a runtime before creating an agent"}
+                  <div className="truncate text-xs text-muted-foreground">
+                    {selectedRuntime
+                      ? (getOwnerMember(selectedRuntime.owner_id)?.name ?? selectedRuntime.device_info)
+                      : "Register a runtime before creating an agent"}
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${runtimeOpen ? "rotate-180" : ""}`} />
