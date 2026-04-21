@@ -19,7 +19,7 @@ import {
   onIssueUpdated,
   onIssueDeleted,
 } from "../issues/ws-updaters";
-import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged } from "../inbox/ws-updaters";
+import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged, onInboxIssueDeleted } from "../inbox/ws-updaters";
 import { inboxKeys } from "../inbox/queries";
 import { workspaceKeys, workspaceListOptions } from "../workspace/queries";
 import { chatKeys } from "../chat/queries";
@@ -186,7 +186,10 @@ export function useRealtimeSync(
       const { issue_id } = p as IssueDeletedPayload;
       if (!issue_id) return;
       const wsId = getCurrentWsId();
-      if (wsId) onIssueDeleted(qc, wsId, issue_id);
+      if (wsId) {
+        onIssueDeleted(qc, wsId, issue_id);
+        onInboxIssueDeleted(qc, wsId, issue_id);
+      }
     });
 
     const unsubInboxNew = ws.on("inbox:new", (p) => {

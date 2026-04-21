@@ -223,7 +223,11 @@ export function InboxPage() {
       layoutId="multica_inbox_issue_detail_layout"
       highlightCommentId={selected.details?.comment_id ?? undefined}
       onDelete={() => {
-        handleArchive(selected.id);
+        // Issue deletion CASCADE-deletes the inbox item server-side, and the
+        // issue:deleted WS event prunes it from the inbox cache. Just clear
+        // the selection — calling archive here would 404 on a row that no
+        // longer exists.
+        setSelectedKey("");
       }}
     />
   ) : selected ? (
