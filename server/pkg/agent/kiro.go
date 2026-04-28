@@ -93,6 +93,9 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 		stdin:        stdin,
 		pending:      make(map[int]*pendingRPC),
 		pendingTools: make(map[string]*pendingToolCall),
+		acceptNotification: func(string) bool {
+			return streamingCurrentTurn.Load()
+		},
 		onMessage: func(msg Message) {
 			if !streamingCurrentTurn.Load() {
 				return
