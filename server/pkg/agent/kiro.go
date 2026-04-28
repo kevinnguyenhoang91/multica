@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -83,6 +84,7 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 
 	var outputMu sync.Mutex
 	var output strings.Builder
+	var streamingCurrentTurn atomic.Bool
 
 	promptDone := make(chan hermesPromptResult, 1)
 
@@ -92,6 +94,9 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 		pending:      make(map[int]*pendingRPC),
 		pendingTools: make(map[string]*pendingToolCall),
 		onMessage: func(msg Message) {
+			if !streamingCurrentTurn.Load() {
+				return
+			}
 			if msg.Type == MessageToolUse {
 				msg.Tool = kiroToolNameFromTitle(msg.Tool)
 			}
@@ -103,6 +108,9 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 			trySend(msgCh, msg)
 		},
 		onPromptDone: func(result hermesPromptResult) {
+			if !streamingCurrentTurn.Load() {
+				return
+			}
 			select {
 			case promptDone <- result:
 			default:
@@ -226,6 +234,7 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 		// requires the standard ACP `prompt` field. Send both so either wire
 		// shape can drive the turn.
 		// TODO: drop one field once Kiro lands on a single canonical payload.
+		streamingCurrentTurn.Store(true)
 		_, err = c.request(runCtx, "session/prompt", map[string]any{
 			"sessionId": sessionID,
 			"content":   promptBlocks,

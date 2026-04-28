@@ -67,6 +67,7 @@ while IFS= read -r line; do
       printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"ses_new","models":{"currentModelId":"auto","availableModels":[{"modelId":"auto","name":"auto"}]}}}\n' "$id"
       ;;
     *'"method":"session/load"'*)
+      printf '{"jsonrpc":"2.0","method":"session/notification","params":{"sessionId":"ses_loaded","update":{"type":"AgentMessageChunk","content":{"type":"text","text":"history should be ignored"}}}}\n'
       printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id"
       ;;
     *'"method":"session/resume"'*)
