@@ -97,32 +97,48 @@ const countIssues = `-- name: CountIssues :one
 SELECT count(*) FROM issue
 WHERE workspace_id = $1
   AND ($2::text IS NULL OR status = $2)
-  AND ($3::text IS NULL OR priority = $3)
-  AND ($4::uuid IS NULL OR assignee_id = $4)
-  AND ($5::uuid[] IS NULL OR assignee_id = ANY($5::uuid[]))
-  AND ($6::uuid IS NULL OR creator_id = $6)
-  AND ($7::uuid IS NULL OR project_id = $7)
+  AND ($3::text[] IS NULL OR priority = ANY($3::text[]))
+  AND (
+    ($4::uuid[] IS NULL AND NOT COALESCE($5::bool, false))
+    OR assignee_id = ANY($4::uuid[])
+    OR (COALESCE($5::bool, false) AND assignee_id IS NULL)
+  )
+  AND ($6::uuid[] IS NULL OR creator_id = ANY($6::uuid[]))
+  AND (
+    ($7::uuid[] IS NULL AND NOT COALESCE($8::bool, false))
+    OR project_id = ANY($7::uuid[])
+    OR (COALESCE($8::bool, false) AND project_id IS NULL)
+  )
+  AND ($9::uuid[] IS NULL OR EXISTS (
+    SELECT 1 FROM issue_to_label il
+    WHERE il.issue_id = issue.id
+      AND il.label_id = ANY($9::uuid[])
+  ))
 `
 
 type CountIssuesParams struct {
-	WorkspaceID pgtype.UUID   `json:"workspace_id"`
-	Status      pgtype.Text   `json:"status"`
-	Priority    pgtype.Text   `json:"priority"`
-	AssigneeID  pgtype.UUID   `json:"assignee_id"`
-	AssigneeIds []pgtype.UUID `json:"assignee_ids"`
-	CreatorID   pgtype.UUID   `json:"creator_id"`
-	ProjectID   pgtype.UUID   `json:"project_id"`
+	WorkspaceID       pgtype.UUID   `json:"workspace_id"`
+	Status            pgtype.Text   `json:"status"`
+	Priorities        []string      `json:"priorities"`
+	AssigneeIds       []pgtype.UUID `json:"assignee_ids"`
+	IncludeNoAssignee pgtype.Bool   `json:"include_no_assignee"`
+	CreatorIds        []pgtype.UUID `json:"creator_ids"`
+	ProjectIds        []pgtype.UUID `json:"project_ids"`
+	IncludeNoProject  pgtype.Bool   `json:"include_no_project"`
+	LabelIds          []pgtype.UUID `json:"label_ids"`
 }
 
 func (q *Queries) CountIssues(ctx context.Context, arg CountIssuesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countIssues,
 		arg.WorkspaceID,
 		arg.Status,
-		arg.Priority,
-		arg.AssigneeID,
+		arg.Priorities,
 		arg.AssigneeIds,
-		arg.CreatorID,
-		arg.ProjectID,
+		arg.IncludeNoAssignee,
+		arg.CreatorIds,
+		arg.ProjectIds,
+		arg.IncludeNoProject,
+		arg.LabelIds,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -459,25 +475,39 @@ SELECT id, workspace_id, title, description, status, priority,
 FROM issue
 WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
-  AND ($5::text IS NULL OR priority = $5)
-  AND ($6::uuid IS NULL OR assignee_id = $6)
-  AND ($7::uuid[] IS NULL OR assignee_id = ANY($7::uuid[]))
-  AND ($8::uuid IS NULL OR creator_id = $8)
-  AND ($9::uuid IS NULL OR project_id = $9)
+  AND ($5::text[] IS NULL OR priority = ANY($5::text[]))
+  AND (
+    ($6::uuid[] IS NULL AND NOT COALESCE($7::bool, false))
+    OR assignee_id = ANY($6::uuid[])
+    OR (COALESCE($7::bool, false) AND assignee_id IS NULL)
+  )
+  AND ($8::uuid[] IS NULL OR creator_id = ANY($8::uuid[]))
+  AND (
+    ($9::uuid[] IS NULL AND NOT COALESCE($10::bool, false))
+    OR project_id = ANY($9::uuid[])
+    OR (COALESCE($10::bool, false) AND project_id IS NULL)
+  )
+  AND ($11::uuid[] IS NULL OR EXISTS (
+    SELECT 1 FROM issue_to_label il
+    WHERE il.issue_id = issue.id
+      AND il.label_id = ANY($11::uuid[])
+  ))
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type ListIssuesParams struct {
-	WorkspaceID pgtype.UUID   `json:"workspace_id"`
-	Limit       int32         `json:"limit"`
-	Offset      int32         `json:"offset"`
-	Status      pgtype.Text   `json:"status"`
-	Priority    pgtype.Text   `json:"priority"`
-	AssigneeID  pgtype.UUID   `json:"assignee_id"`
-	AssigneeIds []pgtype.UUID `json:"assignee_ids"`
-	CreatorID   pgtype.UUID   `json:"creator_id"`
-	ProjectID   pgtype.UUID   `json:"project_id"`
+	WorkspaceID       pgtype.UUID   `json:"workspace_id"`
+	Limit             int32         `json:"limit"`
+	Offset            int32         `json:"offset"`
+	Status            pgtype.Text   `json:"status"`
+	Priorities        []string      `json:"priorities"`
+	AssigneeIds       []pgtype.UUID `json:"assignee_ids"`
+	IncludeNoAssignee pgtype.Bool   `json:"include_no_assignee"`
+	CreatorIds        []pgtype.UUID `json:"creator_ids"`
+	ProjectIds        []pgtype.UUID `json:"project_ids"`
+	IncludeNoProject  pgtype.Bool   `json:"include_no_project"`
+	LabelIds          []pgtype.UUID `json:"label_ids"`
 }
 
 type ListIssuesRow struct {
@@ -506,11 +536,13 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 		arg.Limit,
 		arg.Offset,
 		arg.Status,
-		arg.Priority,
-		arg.AssigneeID,
+		arg.Priorities,
 		arg.AssigneeIds,
-		arg.CreatorID,
-		arg.ProjectID,
+		arg.IncludeNoAssignee,
+		arg.CreatorIds,
+		arg.ProjectIds,
+		arg.IncludeNoProject,
+		arg.LabelIds,
 	)
 	if err != nil {
 		return nil, err
@@ -555,21 +587,35 @@ SELECT id, workspace_id, title, description, status, priority,
 FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
-  AND ($2::text IS NULL OR priority = $2)
-  AND ($3::uuid IS NULL OR assignee_id = $3)
-  AND ($4::uuid[] IS NULL OR assignee_id = ANY($4::uuid[]))
-  AND ($5::uuid IS NULL OR creator_id = $5)
-  AND ($6::uuid IS NULL OR project_id = $6)
+  AND ($2::text[] IS NULL OR priority = ANY($2::text[]))
+  AND (
+    ($3::uuid[] IS NULL AND NOT COALESCE($4::bool, false))
+    OR assignee_id = ANY($3::uuid[])
+    OR (COALESCE($4::bool, false) AND assignee_id IS NULL)
+  )
+  AND ($5::uuid[] IS NULL OR creator_id = ANY($5::uuid[]))
+  AND (
+    ($6::uuid[] IS NULL AND NOT COALESCE($7::bool, false))
+    OR project_id = ANY($6::uuid[])
+    OR (COALESCE($7::bool, false) AND project_id IS NULL)
+  )
+  AND ($8::uuid[] IS NULL OR EXISTS (
+    SELECT 1 FROM issue_to_label il
+    WHERE il.issue_id = issue.id
+      AND il.label_id = ANY($8::uuid[])
+  ))
 ORDER BY position ASC, created_at DESC
 `
 
 type ListOpenIssuesParams struct {
-	WorkspaceID pgtype.UUID   `json:"workspace_id"`
-	Priority    pgtype.Text   `json:"priority"`
-	AssigneeID  pgtype.UUID   `json:"assignee_id"`
-	AssigneeIds []pgtype.UUID `json:"assignee_ids"`
-	CreatorID   pgtype.UUID   `json:"creator_id"`
-	ProjectID   pgtype.UUID   `json:"project_id"`
+	WorkspaceID       pgtype.UUID   `json:"workspace_id"`
+	Priorities        []string      `json:"priorities"`
+	AssigneeIds       []pgtype.UUID `json:"assignee_ids"`
+	IncludeNoAssignee pgtype.Bool   `json:"include_no_assignee"`
+	CreatorIds        []pgtype.UUID `json:"creator_ids"`
+	ProjectIds        []pgtype.UUID `json:"project_ids"`
+	IncludeNoProject  pgtype.Bool   `json:"include_no_project"`
+	LabelIds          []pgtype.UUID `json:"label_ids"`
 }
 
 type ListOpenIssuesRow struct {
@@ -595,11 +641,13 @@ type ListOpenIssuesRow struct {
 func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) ([]ListOpenIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listOpenIssues,
 		arg.WorkspaceID,
-		arg.Priority,
-		arg.AssigneeID,
+		arg.Priorities,
 		arg.AssigneeIds,
-		arg.CreatorID,
-		arg.ProjectID,
+		arg.IncludeNoAssignee,
+		arg.CreatorIds,
+		arg.ProjectIds,
+		arg.IncludeNoProject,
+		arg.LabelIds,
 	)
 	if err != nil {
 		return nil, err
