@@ -169,9 +169,9 @@ export function QuickCreateStack() {
               <div className="relative size-8 shrink-0 flex items-center justify-center">
                 <ActorAvatar actorType="agent" actorId={item.agentId} size={20} />
 
-                {/* Spinning ring for pending */}
+                {/* Subtle pulsing ring for pending */}
                 {isPending && (
-                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-brand animate-spin pointer-events-none" />
+                  <div className="absolute inset-0 rounded-full ring-2 ring-brand/40 animate-pulse pointer-events-none" />
                 )}
 
                 {/* Success ring + icon */}
