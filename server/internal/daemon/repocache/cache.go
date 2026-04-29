@@ -674,9 +674,9 @@ const prepareCommitMsgHook = `#!/bin/sh
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="$2"
 
-# Skip merge commits.
+# Skip merge and squash commits.
 case "$COMMIT_SOURCE" in
-  merge) exit 0 ;;
+  merge|squash) exit 0 ;;
 esac
 
 TRAILER="Co-authored-by: multica-agent <github@multica.ai>"
