@@ -164,12 +164,18 @@ export function AgentCreatePanel({
     setSubmitting(true);
     setError(null);
     try {
-      await api.quickCreateIssue({ agent_id: agentId, prompt: md });
+      const { task_id } = await api.quickCreateIssue({ agent_id: agentId, prompt: md });
       setLastAgentId(agentId);
       setLastMode("agent");
-      toast.success("Sent to agent — you'll get an inbox notification when it's done", {
-        duration: 4000,
+      useQuickCreateStore.getState().addPendingTask({
+        taskId: task_id,
+        prompt: md,
+        agentName: selectedAgent?.name ?? "Agent",
       });
+      toast.loading(
+        `${selectedAgent?.name ?? "Agent"} is creating your issue…`,
+        { id: task_id },
+      );
       if (keepOpen) {
         // Stay open for continuous creation — clear the editor so the
         // user can immediately type the next prompt.
