@@ -241,7 +241,7 @@ export function AgentCreatePanel({
         <DialogTitle className="sr-only">Quick create issue</DialogTitle>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
+        <div className="flex items-center justify-between px-5 pt-3 pb-2 shrink-0">
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-muted-foreground">{workspaceName}</span>
             <ChevronRight className="size-3 text-muted-foreground/50" />
@@ -263,24 +263,24 @@ export function AgentCreatePanel({
         </div>
 
         {/* Agent picker */}
-        <div className="px-5 pt-1 pb-3 shrink-0">
+        <div className="px-5 pt-1 pb-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <button
                   type="button"
                   aria-label="Select agent"
-                  className="inline-flex max-w-full items-center gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground cursor-pointer"
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-sm px-1.5 py-1 -ml-1.5 hover:bg-accent/60"
                 >
-                  <span className="shrink-0">Created by</span>
+                  <span>Created by</span>
                   {selectedAgent ? (
-                    <span className="flex min-w-0 items-center gap-1.5 text-foreground">
+                    <span className="flex items-center gap-1.5 text-foreground">
                       <ActorAvatar
                         actorType="agent"
                         actorId={selectedAgent.id}
                         size={16}
                       />
-                      <span className="truncate">{selectedAgent.name}</span>
+                      {selectedAgent.name}
                     </span>
                   ) : (
                     <span>Pick an agent…</span>
@@ -336,12 +336,12 @@ export function AgentCreatePanel({
             editor unbounded and pushed the modal past the viewport. */}
         <div
           {...dropZoneProps}
-          className="relative mx-5 mb-4 flex-1 min-h-[11rem] max-h-[42vh] overflow-y-auto rounded-lg border bg-background px-3 py-2.5 transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:ring-[3px] focus-within:ring-ring/15"
+          className="relative px-5 pb-3 flex-1 min-h-[140px] overflow-y-auto"
         >
           <ContentEditor
             ref={editorRef}
             defaultValue={initialPrompt}
-            placeholder="Describe the task for this agent..."
+            placeholder='Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"'
             onUpdate={(md) => setHasContent(md.trim().length > 0)}
             onUploadFile={handleUploadFile}
             onSubmit={submit}
@@ -376,7 +376,7 @@ export function AgentCreatePanel({
               className="flex shrink-0 items-center gap-1.5 text-xs px-2 py-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors cursor-pointer"
             >
               <ArrowLeftRight className="size-3.5" />
-              Switch to manual
+              Manual
             </button>
             <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
               <Switch
@@ -395,11 +395,11 @@ export function AgentCreatePanel({
                   ? `Daemon CLI must be ≥ ${versionCheck.min}`
                   : undefined
               }
-              className={justSent ? "min-w-20 !bg-emerald-600 !text-white" : "min-w-20"}
+              className={justSent ? "min-w-28 !bg-emerald-600 !text-white" : "min-w-28"}
             >
               {submitting ? "Sending…" : uploading ? "Uploading…" : justSent ? (
                 <span className="flex items-center gap-1"><Check className="size-3.5" />Sent</span>
-              ) : "Create"}
+              ) : "Create (⌘↵)"}
             </Button>
           </div>
         </div>
