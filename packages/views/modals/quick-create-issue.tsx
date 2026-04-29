@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { Button } from "@multica/ui/components/ui/button";
+import { Switch } from "@multica/ui/components/ui/switch";
 import { api, ApiError } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useCurrentWorkspace } from "@multica/core/paths";
@@ -79,6 +80,8 @@ export function AgentCreatePanel({
 
   const lastAgentId = useQuickCreateStore((s) => s.lastAgentId);
   const setLastAgentId = useQuickCreateStore((s) => s.setLastAgentId);
+  const keepOpen = useQuickCreateStore((s) => s.keepOpen);
+  const setKeepOpen = useQuickCreateStore((s) => s.setKeepOpen);
   const setLastMode = useCreateModeStore((s) => s.setLastMode);
 
   const [agentId, setAgentId] = useState<string | undefined>(() => {
@@ -167,14 +170,18 @@ export function AgentCreatePanel({
       toast.success("Sent to agent — you'll get an inbox notification when it's done", {
         duration: 4000,
       });
-      // Stay open for continuous creation — clear the editor so the user
-      // can immediately type the next prompt without reopening the dialog.
-      editorRef.current?.clearContent();
-      setHasContent(false);
-      setSentCount((c) => c + 1);
-      setJustSent(true);
-      setTimeout(() => setJustSent(false), 1500);
-      requestAnimationFrame(() => editorRef.current?.focus());
+      if (keepOpen) {
+        // Stay open for continuous creation — clear the editor so the
+        // user can immediately type the next prompt.
+        editorRef.current?.clearContent();
+        setHasContent(false);
+        setSentCount((c) => c + 1);
+        setJustSent(true);
+        setTimeout(() => setJustSent(false), 1500);
+        requestAnimationFrame(() => editorRef.current?.focus());
+      } else {
+        onClose();
+      }
     } catch (e) {
       // Server returns 422 with { code, ... } for the structured rejection
       // paths the modal cares about. Surface the reason in-modal so the
@@ -350,7 +357,7 @@ export function AgentCreatePanel({
               onSelect={(file) => editorRef.current?.uploadFile(file)}
             />
             <span className="text-xs text-muted-foreground">
-              {sentCount > 0 && (
+              {keepOpen && sentCount > 0 && (
                 <span className="text-emerald-600 dark:text-emerald-400">{sentCount} sent · </span>
               )}
               ⌘↵ to submit
@@ -366,6 +373,14 @@ export function AgentCreatePanel({
               <ArrowLeftRight className="size-3.5" />
               Switch to manual
             </button>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <Switch
+                size="sm"
+                checked={keepOpen}
+                onCheckedChange={setKeepOpen}
+              />
+              Create another
+            </label>
             <Button
               size="sm"
               onClick={submit}
