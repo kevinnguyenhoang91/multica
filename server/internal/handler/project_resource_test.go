@@ -116,8 +116,7 @@ func TestProjectResourceLifecycle(t *testing.T) {
 	// Delete the resource.
 	w = httptest.NewRecorder()
 	req = newRequest("DELETE", "/api/projects/"+project.ID+"/resources/"+created.ID, nil)
-	req = withURLParam(req, "id", project.ID)
-	req = withURLParam(req, "resourceId", created.ID)
+	req = withURLParams(req, "id", project.ID, "resourceId", created.ID)
 	testHandler.DeleteProjectResource(w, req)
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("DeleteProjectResource: expected 204, got %d: %s", w.Code, w.Body.String())
@@ -133,6 +132,76 @@ func TestProjectResourceLifecycle(t *testing.T) {
 	}
 	if listResp.Total != 0 {
 		t.Errorf("post-delete list: total = %d, want 0", listResp.Total)
+	}
+}
+
+func TestCreateProjectAttachesResources(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Project with bundled resources",
+		"resources": []map[string]any{
+			{
+				"resource_type": "github_repo",
+				"resource_ref":  map[string]any{"url": "https://github.com/multica-ai/multica"},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject with resources: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID        string                    `json:"id"`
+		Resources []ProjectResourceResponse `json:"resources"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+resp.ID, nil)
+		r = withURLParam(r, "id", resp.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	if len(resp.Resources) != 1 || resp.Resources[0].ResourceType != "github_repo" {
+		t.Fatalf("response resources mismatch: %+v", resp.Resources)
+	}
+}
+
+func TestCreateProjectRollsBackOnInvalidResource(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Project that should not exist",
+		"resources": []map[string]any{
+			{
+				"resource_type": "github_repo",
+				"resource_ref":  map[string]any{"url": "not-a-url"},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateProject with invalid resource: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Confirm no project survived (transactional rollback). Listing all projects
+	// in the workspace and checking for the title is enough.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListProjects(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListProjects: %d %s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Projects []ProjectResponse `json:"projects"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	for _, p := range list.Projects {
+		if p.Title == "Project that should not exist" {
+			t.Errorf("invalid resource should have rolled back project create, but found %s", p.ID)
+		}
 	}
 }
 

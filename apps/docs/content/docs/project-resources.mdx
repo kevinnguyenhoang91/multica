@@ -40,7 +40,9 @@ In the **Web** or **Desktop** app, opening *New project* now shows a **Repos** p
 From the **CLI**:
 
 ```bash
-# Create + attach in one shot
+# Create + attach in one shot. The server attaches resources in the same
+# transaction as the project create — invalid resources roll back the whole
+# operation, so you never end up with a project that has half its resources.
 multica project create \
   --title "Agent UX 2026" \
   --repo https://github.com/multica-ai/multica
@@ -49,6 +51,12 @@ multica project create \
 multica project resource list <project-id>
 multica project resource add  <project-id> --type github_repo --url <url>
 multica project resource remove <project-id> <resource-id>
+
+# Generic escape hatch for any resource_type the server understands —
+# no CLI change needed when a new type ships:
+multica project resource add <project-id> \
+  --type notion_page \
+  --ref '{"page_id":"…","title":"…"}'
 ```
 
 `--repo` may be repeated; each value is attached as a separate `github_repo` resource.
@@ -112,7 +120,9 @@ The whole point of the abstraction is that new types are cheap. The full path:
 3. **TypeScript types** (`packages/core/types/project.ts`) — extend `ProjectResourceType` and add the payload interface.
 4. **UI renderer** (`packages/views/projects/components/project-resources-section.tsx`) — add a case in `ResourceRow` for the new type.
 
-There is **no schema migration**, no new sqlc query, no new endpoint. The same `project_resource` table and the same three CRUD calls handle every type.
+There is **no schema migration**, no new sqlc query, no new endpoint, **and no CLI change** — the CLI's generic `--ref '<json>'` flag accepts any payload the validator understands, so day-one support for a new type is purely the four steps above. (You may *optionally* add a per-type CLI shortcut later; not required.)
+
+The same `project_resource` table and the same three CRUD calls handle every type.
 
 ## What's intentionally **not** in scope here
 

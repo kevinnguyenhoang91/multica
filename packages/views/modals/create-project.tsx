@@ -5,7 +5,6 @@ import { ChevronRight, FolderGit, Maximize2, Minimize2, X as XIcon, UserMinus } 
 import { useQuery } from "@tanstack/react-query";
 import { useCreateProject } from "@multica/core/projects/mutations";
 import { useProjectDraftStore } from "@multica/core/projects";
-import { api } from "@multica/core/api";
 import {
   PROJECT_STATUS_CONFIG,
   PROJECT_STATUS_ORDER,
@@ -122,30 +121,15 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
         priority,
         lead_type: leadType,
         lead_id: leadId,
-      });
-      // Attach selected repos. We don't roll back the project on failure here —
-      // the user can retry attaching from the project detail page. A failed
-      // resource attach is surfaced as a toast, not a fatal error.
-      if (selectedRepos.length > 0) {
-        const failures: string[] = [];
-        await Promise.all(
-          selectedRepos.map(async (url) => {
-            try {
-              await api.createProjectResource(project.id, {
-                resource_type: "github_repo",
+        // Server attaches these in the same transaction as the project.
+        resources:
+          selectedRepos.length > 0
+            ? selectedRepos.map((url) => ({
+                resource_type: "github_repo" as const,
                 resource_ref: { url },
-              });
-            } catch {
-              failures.push(url);
-            }
-          }),
-        );
-        if (failures.length > 0) {
-          toast.error(
-            `Project created but failed to attach ${failures.length} repo${failures.length === 1 ? "" : "s"}.`,
-          );
-        }
-      }
+              }))
+            : undefined,
+      });
       clearDraft();
       onClose();
       toast.success("Project created");

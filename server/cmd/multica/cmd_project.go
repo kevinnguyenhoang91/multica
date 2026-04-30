@@ -121,10 +121,13 @@ func init() {
 	// project resource list
 	projectResourceListCmd.Flags().String("output", "table", "Output format: table or json")
 
-	// project resource add
-	projectResourceAddCmd.Flags().String("type", "github_repo", "Resource type (e.g. github_repo)")
-	projectResourceAddCmd.Flags().String("url", "", "Resource URL (for github_repo: the repo URL)")
-	projectResourceAddCmd.Flags().String("default-branch-hint", "", "Optional default branch hint for github_repo")
+	// project resource add — generic shape: any --type with a JSON --ref payload
+	// works without further CLI changes. github_repo is supported via the
+	// dedicated --url / --default-branch-hint shortcuts as a convenience.
+	projectResourceAddCmd.Flags().String("type", "github_repo", "Resource type (e.g. github_repo, notion_page — see docs)")
+	projectResourceAddCmd.Flags().String("url", "", "Shortcut: the repo URL (only used when --type github_repo)")
+	projectResourceAddCmd.Flags().String("default-branch-hint", "", "Shortcut: optional default branch hint (only used when --type github_repo)")
+	projectResourceAddCmd.Flags().String("ref", "", "Generic JSON resource_ref payload — overrides the per-type shortcuts when set")
 	projectResourceAddCmd.Flags().String("label", "", "Optional human-readable label")
 	projectResourceAddCmd.Flags().String("output", "json", "Output format: table or json")
 
@@ -273,34 +276,30 @@ func runProjectCreate(cmd *cobra.Command, _ []string) error {
 		body["lead_id"] = aID
 	}
 
-	var result map[string]any
-	if err := client.PostJSON(ctx, "/api/projects", body, &result); err != nil {
-		return fmt.Errorf("create project: %w", err)
-	}
-
+	// Bundle resources into the create payload so the server attaches them in
+	// the same transaction; this avoids leaving a half-attached project on
+	// failure.
 	repos, _ := cmd.Flags().GetStringArray("repo")
 	if len(repos) > 0 {
-		projectID := strVal(result, "id")
-		if projectID == "" {
-			return fmt.Errorf("project created but server response did not include id; cannot attach repos")
-		}
-		attached := make([]map[string]any, 0, len(repos))
+		resources := make([]map[string]any, 0, len(repos))
 		for _, repoURL := range repos {
 			repoURL = strings.TrimSpace(repoURL)
 			if repoURL == "" {
 				continue
 			}
-			body := map[string]any{
+			resources = append(resources, map[string]any{
 				"resource_type": "github_repo",
 				"resource_ref":  map[string]any{"url": repoURL},
-			}
-			var resp map[string]any
-			if err := client.PostJSON(ctx, "/api/projects/"+projectID+"/resources", body, &resp); err != nil {
-				return fmt.Errorf("attach repo %s: %w", repoURL, err)
-			}
-			attached = append(attached, resp)
+			})
 		}
-		result["resources"] = attached
+		if len(resources) > 0 {
+			body["resources"] = resources
+		}
+	}
+
+	var result map[string]any
+	if err := client.PostJSON(ctx, "/api/projects", body, &result); err != nil {
+		return fmt.Errorf("create project: %w", err)
 	}
 
 	output, _ := cmd.Flags().GetString("output")
@@ -484,20 +483,31 @@ func runProjectResourceAdd(cmd *cobra.Command, args []string) error {
 
 	body := map[string]any{"resource_type": resourceType}
 
-	switch resourceType {
-	case "github_repo":
-		urlVal, _ := cmd.Flags().GetString("url")
-		urlVal = strings.TrimSpace(urlVal)
-		if urlVal == "" {
-			return fmt.Errorf("--url is required for type github_repo")
-		}
-		ref := map[string]any{"url": urlVal}
-		if hint, _ := cmd.Flags().GetString("default-branch-hint"); hint != "" {
-			ref["default_branch_hint"] = strings.TrimSpace(hint)
+	// --ref takes precedence: any new resource type works through this path
+	// without a CLI change. Per-type shortcuts (--url etc.) only apply when
+	// --ref is empty.
+	if rawRef, _ := cmd.Flags().GetString("ref"); strings.TrimSpace(rawRef) != "" {
+		var ref any
+		if err := json.Unmarshal([]byte(rawRef), &ref); err != nil {
+			return fmt.Errorf("--ref is not valid JSON: %w", err)
 		}
 		body["resource_ref"] = ref
-	default:
-		return fmt.Errorf("unsupported resource type %q", resourceType)
+	} else {
+		switch resourceType {
+		case "github_repo":
+			urlVal, _ := cmd.Flags().GetString("url")
+			urlVal = strings.TrimSpace(urlVal)
+			if urlVal == "" {
+				return fmt.Errorf("github_repo requires --url (or pass a JSON payload via --ref)")
+			}
+			ref := map[string]any{"url": urlVal}
+			if hint, _ := cmd.Flags().GetString("default-branch-hint"); hint != "" {
+				ref["default_branch_hint"] = strings.TrimSpace(hint)
+			}
+			body["resource_ref"] = ref
+		default:
+			return fmt.Errorf("type %q has no built-in CLI shortcut; pass the payload via --ref '<json>'", resourceType)
+		}
 	}
 
 	if label, _ := cmd.Flags().GetString("label"); label != "" {

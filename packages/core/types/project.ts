@@ -26,6 +26,9 @@ export interface CreateProjectRequest {
   priority?: ProjectPriority;
   lead_type?: "member" | "agent";
   lead_id?: string;
+  // Resources to attach in the same transaction as the project. Server returns
+  // 4xx (and rolls back) if any one is invalid or duplicate.
+  resources?: CreateProjectResourceRequest[];
 }
 
 export interface UpdateProjectRequest {
