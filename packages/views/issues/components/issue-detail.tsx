@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { AppLink } from "../../navigation";
 import { useNavigation } from "../../navigation";
@@ -194,6 +194,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const didHighlightRef = useRef<string | null>(null);
+  const activitySectionRef = useRef<HTMLDivElement>(null);
 
   // Issue data from TQ — uses detail query, seeded from list cache if available.
   // Only seed when description is present; list API omits it, and ContentEditor
@@ -292,6 +293,15 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
       });
     }
   }, [highlightCommentId, timeline.length]);
+
+  // When opening from inbox with a target comment, scroll past the description
+  // to the activity section before the browser paints, so the user never sees
+  // the description flash. The precise scroll to the specific comment happens
+  // in the useEffect above once the timeline has loaded.
+  useLayoutEffect(() => {
+    if (!highlightCommentId) return;
+    activitySectionRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const descEditorRef = useRef<ContentEditorRef>(null);
   const { isDragOver: descDragOver, dropZoneProps: descDropZoneProps } = useFileDropZone({
@@ -798,7 +808,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           <div className="my-8 border-t" />
 
           {/* Activity / Comments */}
-          <div>
+          <div ref={activitySectionRef}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-base font-semibold">Activity</h2>
