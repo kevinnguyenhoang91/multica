@@ -19,8 +19,19 @@ import (
 // It passes the full daemon environment so credential helpers (e.g. gh) can
 // locate their config, and disables TTY prompting so auth failures produce
 // clear errors instead of blocking on a non-existent terminal.
+//
+// safe.directory=* is set via GIT_CONFIG_* env vars so git trusts all
+// directories regardless of ownership. The daemon manages its own bare
+// caches and worktrees, so the ownership check adds no security value
+// and breaks CI environments where the runner UID differs from the
+// directory owner.
 func gitEnv() []string {
-	return append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=safe.directory",
+		"GIT_CONFIG_VALUE_0=*",
+	)
 }
 
 // RepoInfo describes a repository to cache.

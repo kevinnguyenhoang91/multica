@@ -44,6 +44,23 @@ func TestGitEnv(t *testing.T) {
 	if !foundHome {
 		t.Error("gitEnv() must include HOME from os.Environ()")
 	}
+
+	// Must set safe.directory=* via GIT_CONFIG env vars.
+	want := map[string]bool{
+		"GIT_CONFIG_COUNT=1":              false,
+		"GIT_CONFIG_KEY_0=safe.directory": false,
+		"GIT_CONFIG_VALUE_0=*":            false,
+	}
+	for _, entry := range env {
+		if _, ok := want[entry]; ok {
+			want[entry] = true
+		}
+	}
+	for k, found := range want {
+		if !found {
+			t.Errorf("gitEnv() must include %s", k)
+		}
+	}
 }
 
 func TestBareDirName(t *testing.T) {
