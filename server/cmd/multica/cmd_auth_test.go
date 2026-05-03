@@ -119,6 +119,39 @@ func TestResolveCallbackBinding(t *testing.T) {
 	}
 }
 
+// TestLoginTokenFlagAcceptsValue guards against regressing #1994: the
+// `--token` flag must accept the PAT as a string value (both `--token foo`
+// and `--token=foo`). It used to be a Bool, which silently dropped the
+// supplied value and forced an interactive prompt.
+func TestLoginTokenFlagAcceptsValue(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"space-separated value", []string{"--token", "mul_abc"}, "mul_abc"},
+		{"equals-separated value", []string{"--token=mul_abc"}, "mul_abc"},
+		{"explicit empty value triggers prompt", []string{"--token="}, ""},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: "login"}
+			cmd.Flags().String("token", "", "")
+			if err := cmd.ParseFlags(tc.args); err != nil {
+				t.Fatalf("ParseFlags(%v) error: %v", tc.args, err)
+			}
+			if !cmd.Flags().Changed("token") {
+				t.Fatalf("expected --token flag to be marked Changed for args %v", tc.args)
+			}
+			got, _ := cmd.Flags().GetString("token")
+			if got != tc.want {
+				t.Fatalf("token value = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeAPIBaseURL(t *testing.T) {
 	t.Run("converts websocket base URL", func(t *testing.T) {
 		if got := normalizeAPIBaseURL("ws://localhost:18106/ws"); got != "http://localhost:18106" {

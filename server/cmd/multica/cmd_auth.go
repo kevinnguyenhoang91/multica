@@ -92,9 +92,9 @@ func openBrowser(url string) error {
 }
 
 func runAuthLogin(cmd *cobra.Command, _ []string) error {
-	useToken, _ := cmd.Flags().GetBool("token")
-	if useToken {
-		return runAuthLoginToken(cmd)
+	if cmd.Flags().Changed("token") {
+		tokenFlag, _ := cmd.Flags().GetString("token")
+		return runAuthLoginToken(cmd, tokenFlag)
 	}
 	return runAuthLoginBrowser(cmd)
 }
@@ -320,13 +320,16 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 	return nil
 }
 
-func runAuthLoginToken(cmd *cobra.Command) error {
-	fmt.Print("Enter your personal access token: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	if !scanner.Scan() {
-		return fmt.Errorf("no input")
+func runAuthLoginToken(cmd *cobra.Command, providedToken string) error {
+	token := strings.TrimSpace(providedToken)
+	if token == "" {
+		fmt.Print("Enter your personal access token: ")
+		scanner := bufio.NewScanner(os.Stdin)
+		if !scanner.Scan() {
+			return fmt.Errorf("no input")
+		}
+		token = strings.TrimSpace(scanner.Text())
 	}
-	token := strings.TrimSpace(scanner.Text())
 	if token == "" {
 		return fmt.Errorf("token is required")
 	}
