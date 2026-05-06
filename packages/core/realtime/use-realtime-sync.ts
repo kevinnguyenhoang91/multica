@@ -28,6 +28,8 @@ import {
 } from "../issues/ws-updaters";
 import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged, onInboxIssueDeleted } from "../inbox/ws-updaters";
 import { inboxKeys } from "../inbox/queries";
+import { notificationPreferenceKeys } from "../notification-preferences/queries";
+import type { NotificationPreferenceResponse } from "../types";
 import { workspaceKeys, workspaceListOptions } from "../workspace/queries";
 import { chatKeys } from "../chat/queries";
 import { useChatStore } from "../chat";
@@ -278,6 +280,15 @@ export function useRealtimeSync(
       // styling is enough — no need to interrupt with a banner. `desktopAPI`
       // is injected by the preload script; its absence (web app) skips silently.
       if (typeof document !== "undefined" && document.hasFocus()) return;
+      // Respect the user's system-notification preference. Read from the
+      // Query cache so we don't have to plumb it through hook params; if the
+      // pref hasn't loaded yet the default ("all") fires the banner.
+      if (wsId) {
+        const prefData = qc.getQueryData<NotificationPreferenceResponse>(
+          notificationPreferenceKeys.all(wsId),
+        );
+        if (prefData?.preferences?.system_notifications === "muted") return;
+      }
       // Capture the source workspace slug at emit time. The user may switch
       // workspaces before clicking the banner (macOS Notification Center
       // holds banners), so routing must not read "current slug" at click
