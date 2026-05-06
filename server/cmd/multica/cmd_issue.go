@@ -651,13 +651,14 @@ func runIssueUpdate(cmd *cobra.Command, args []string) error {
 
 func runIssueAssign(cmd *cobra.Command, args []string) error {
 	toName, _ := cmd.Flags().GetString("to")
-	toID, _ := cmd.Flags().GetString("to-id")
 	unassign, _ := cmd.Flags().GetBool("unassign")
+	toNameSet := cmd.Flags().Changed("to")
+	toIDSet := cmd.Flags().Changed("to-id")
 
-	if toName == "" && toID == "" && !unassign {
+	if !toNameSet && !toIDSet && !unassign {
 		return fmt.Errorf("provide --to <name>, --to-id <uuid>, or --unassign")
 	}
-	if (toName != "" || toID != "") && unassign {
+	if (toNameSet || toIDSet) && unassign {
 		return fmt.Errorf("--to/--to-id and --unassign are mutually exclusive")
 	}
 
@@ -1325,24 +1326,32 @@ func resolveAssigneeByID(ctx context.Context, client *cli.APIClient, id string) 
 
 // pickAssigneeFromFlags reads a (name-flag, id-flag) pair off cmd and resolves
 // it to (assignee_type, assignee_id). The third return reports whether either
-// flag was set; callers use it to decide whether to write `assignee_*` into
-// the request body. The two flags are mutually exclusive — passing both is
-// rejected up-front so a script that accidentally sets both never silently
-// applies one over the other.
+// flag was *explicitly set*; callers use it to decide whether to write
+// `assignee_*` into the request body. The two flags are mutually exclusive —
+// passing both is rejected up-front so a script that accidentally sets both
+// never silently applies one over the other.
+//
+// Presence is detected via Flags().Changed (not value-emptiness): a script
+// that interpolates an empty env var (`--assignee-id "$MAYBE_UUID"`) must
+// fail loudly through resolveAssignee/resolveAssigneeByID rather than silently
+// degrade to "no filter / unassigned / subscribe caller", which would defeat
+// the strict-UUID guarantee the new flags exist for.
 func pickAssigneeFromFlags(ctx context.Context, client *cli.APIClient, cmd *cobra.Command, nameFlag, idFlag string) (string, string, bool, error) {
-	name, _ := cmd.Flags().GetString(nameFlag)
-	idVal, _ := cmd.Flags().GetString(idFlag)
-	if name != "" && idVal != "" {
+	nameSet := cmd.Flags().Changed(nameFlag)
+	idSet := cmd.Flags().Changed(idFlag)
+	if nameSet && idSet {
 		return "", "", false, fmt.Errorf("--%s and --%s are mutually exclusive", nameFlag, idFlag)
 	}
-	if idVal != "" {
+	if idSet {
+		idVal, _ := cmd.Flags().GetString(idFlag)
 		t, i, err := resolveAssigneeByID(ctx, client, idVal)
 		if err != nil {
 			return "", "", true, err
 		}
 		return t, i, true, nil
 	}
-	if name != "" {
+	if nameSet {
+		name, _ := cmd.Flags().GetString(nameFlag)
 		t, i, err := resolveAssignee(ctx, client, name)
 		if err != nil {
 			return "", "", true, err

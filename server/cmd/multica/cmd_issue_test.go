@@ -527,6 +527,49 @@ func TestPickAssigneeFromFlags(t *testing.T) {
 			t.Errorf("expected mutually-exclusive error, got: %v", err)
 		}
 	})
+
+	// Explicit-empty regression: a script that interpolates an empty env var
+	// into `--assignee-id "$MAYBE_UUID"` must NOT silently route through the
+	// "no flag set" branch — that would defeat the whole point of the strict
+	// UUID flag (issue list returning everything, create leaving the issue
+	// unassigned, subscriber add subscribing the caller). Detection is via
+	// Flags().Changed, so an explicit empty string surfaces as a UUID error.
+	t.Run("explicit empty --assignee-id surfaces as UUID error, not silent skip", func(t *testing.T) {
+		c := newCmd()
+		_ = c.Flags().Set("assignee-id", "")
+		_, _, has, err := pickAssigneeFromFlags(ctx, client, c, "assignee", "assignee-id")
+		if err == nil {
+			t.Fatal("expected UUID error for explicit empty assignee-id")
+		}
+		if !has {
+			t.Errorf("expected hasValue=true so caller treats this as a real attempt, not a no-op")
+		}
+		if !strings.Contains(err.Error(), "UUID") {
+			t.Errorf("expected UUID-shaped error, got: %v", err)
+		}
+	})
+
+	t.Run("explicit empty --assignee surfaces as not-found, not silent skip", func(t *testing.T) {
+		c := newCmd()
+		_ = c.Flags().Set("assignee", "")
+		_, _, has, err := pickAssigneeFromFlags(ctx, client, c, "assignee", "assignee-id")
+		if err == nil {
+			t.Fatal("expected resolver error for explicit empty assignee")
+		}
+		if !has {
+			t.Errorf("expected hasValue=true so caller treats this as a real attempt, not a no-op")
+		}
+	})
+
+	t.Run("explicit empty on both flags is mutually exclusive (set wins over value)", func(t *testing.T) {
+		c := newCmd()
+		_ = c.Flags().Set("assignee", "")
+		_ = c.Flags().Set("assignee-id", "")
+		_, _, _, err := pickAssigneeFromFlags(ctx, client, c, "assignee", "assignee-id")
+		if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+			t.Errorf("expected mutually-exclusive error, got: %v", err)
+		}
+	})
 }
 
 func TestIssueSubscriberList(t *testing.T) {
