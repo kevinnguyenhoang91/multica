@@ -1,0 +1,49 @@
+{
+  "page": {
+    "title": "记忆",
+    "new_artifact": "新建条目",
+    "filter_all": "全部",
+    "search_placeholder": "搜索记忆…",
+    "empty_search": "没有匹配的条目",
+    "empty": "还没有记忆条目",
+    "create_first": "创建第一个条目"
+  },
+  "kind": {
+    "wiki_page": "百科",
+    "agent_note": "智能体笔记",
+    "runbook": "操作手册",
+    "decision": "决策记录"
+  },
+  "detail": {
+    "back": "记忆",
+    "archived_badge": "已归档",
+    "restore": "恢复",
+    "archive": "归档",
+    "delete_forever": "永久删除",
+    "untitled_placeholder": "无标题",
+    "content_placeholder": "开始写作…",
+    "updated_prefix": "更新于",
+    "delete_confirm": "永久删除该条目？此操作无法撤销。"
+  },
+  "modal": {
+    "title": "新建记忆条目",
+    "breadcrumb_prefix": "新建",
+    "close": "关闭",
+    "title_placeholder": "标题",
+    "content_placeholder": "开始写作…（支持 Markdown）",
+    "create": "创建",
+    "creating": "创建中…"
+  },
+  "toast": {
+    "created": "已创建",
+    "create_failed": "创建条目失败",
+    "title_update_failed": "标题更新失败",
+    "content_save_failed": "保存内容失败",
+    "archived": "已归档",
+    "archive_failed": "归档失败",
+    "restored": "已恢复",
+    "restore_failed": "恢复失败",
+    "deleted": "已删除",
+    "delete_failed": "删除失败"
+  }
+}

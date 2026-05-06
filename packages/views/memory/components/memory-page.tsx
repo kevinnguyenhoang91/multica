@@ -7,8 +7,8 @@ import {
   memoryListOptions,
   memorySearchOptions,
   MEMORY_KINDS,
-  MEMORY_KIND_LABELS,
 } from "@multica/core/memory";
+import { useT } from "../../i18n";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useModalStore } from "@multica/core/modals";
@@ -46,6 +46,7 @@ const KIND_BADGE: Record<MemoryArtifactKind, string> = {
 function MemoryRow({ artifact }: { artifact: MemoryArtifact }) {
   const wsPaths = useWorkspacePaths();
   const { getActorName } = useActorName();
+  const { t } = useT("memory");
   const authorName = getActorName(artifact.author_type, artifact.author_id);
 
   return (
@@ -59,7 +60,7 @@ function MemoryRow({ artifact }: { artifact: MemoryArtifact }) {
           KIND_BADGE[artifact.kind],
         )}
       >
-        {MEMORY_KIND_LABELS[artifact.kind]}
+        {t(($) => $.kind[artifact.kind])}
       </span>
 
       <span className="min-w-0 flex-1 truncate font-medium">
@@ -102,6 +103,7 @@ function MemoryRow({ artifact }: { artifact: MemoryArtifact }) {
 
 export function MemoryPage() {
   const wsId = useWorkspaceId();
+  const { t } = useT("memory");
   const [kindFilter, setKindFilter] = useState<MemoryArtifactKind | "all">("all");
   const [searchInput, setSearchInput] = useState("");
   // Trim once for both the enable check and the request payload.
@@ -138,7 +140,7 @@ export function MemoryPage() {
       <PageHeader className="justify-between px-5">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <h1 className="text-sm font-medium">Memory</h1>
+          <h1 className="text-sm font-medium">{t(($) => $.page.title)}</h1>
           {!isLoading && artifacts.length > 0 && (
             <span className="text-xs text-muted-foreground tabular-nums">
               {artifacts.length}
@@ -147,7 +149,7 @@ export function MemoryPage() {
         </div>
         <Button size="sm" variant="outline" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5 mr-1" />
-          New artifact
+          {t(($) => $.page.new_artifact)}
         </Button>
       </PageHeader>
 
@@ -160,7 +162,7 @@ export function MemoryPage() {
             active={kindFilter === "all"}
             onClick={() => setKindFilter("all")}
           >
-            All
+            {t(($) => $.page.filter_all)}
           </KindPill>
           {MEMORY_KINDS.map((k) => (
             <KindPill
@@ -168,7 +170,7 @@ export function MemoryPage() {
               active={kindFilter === k}
               onClick={() => setKindFilter(k)}
             >
-              {MEMORY_KIND_LABELS[k]}
+              {t(($) => $.kind[k])}
             </KindPill>
           ))}
         </div>
@@ -176,7 +178,7 @@ export function MemoryPage() {
           <SearchIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <input
             type="text"
-            placeholder="Search memory..."
+            placeholder={t(($) => $.page.search_placeholder)}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
@@ -195,13 +197,11 @@ export function MemoryPage() {
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
             <BookOpen className="h-10 w-10 mb-3 opacity-30" />
             <p className="text-sm">
-              {isSearching
-                ? "No artifacts match your search"
-                : "No memory artifacts yet"}
+              {isSearching ? t(($) => $.page.empty_search) : t(($) => $.page.empty)}
             </p>
             {!isSearching && (
               <Button size="sm" variant="outline" className="mt-3" onClick={openCreate}>
-                Create your first artifact
+                {t(($) => $.page.create_first)}
               </Button>
             )}
           </div>

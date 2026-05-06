@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 import {
   memoryDetailOptions,
-  MEMORY_KIND_LABELS,
   useUpdateMemoryArtifact,
   useArchiveMemoryArtifact,
   useRestoreMemoryArtifact,
   useDeleteMemoryArtifact,
 } from "@multica/core/memory";
+import { useT } from "../../i18n";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useActorName } from "@multica/core/workspace/hooks";
@@ -52,6 +52,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
   const wsPaths = useWorkspacePaths();
   const router = useNavigation();
   const { getActorName } = useActorName();
+  const { t } = useT("memory");
 
   const { data: artifact, isLoading } = useQuery(
     memoryDetailOptions(wsId, id),
@@ -84,7 +85,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Memory</span>
+            <span>{t(($) => $.detail.back)}</span>
           </AppLink>
         </PageHeader>
         <div className="flex-1 px-8 py-6 space-y-3">
@@ -105,7 +106,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
     updateArtifact.mutate(
       { id: artifact.id, title: trimmed },
       {
-        onError: () => toast.error("Failed to update title"),
+        onError: () => toast.error(t(($) => $.toast.title_update_failed)),
       },
     );
   };
@@ -115,39 +116,35 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
     updateArtifact.mutate(
       { id: artifact.id, content: markdown },
       {
-        onError: () => toast.error("Failed to save content"),
+        onError: () => toast.error(t(($) => $.toast.content_save_failed)),
       },
     );
   };
 
   const handleArchive = () => {
     archiveArtifact.mutate(artifact.id, {
-      onSuccess: () => toast.success("Archived"),
-      onError: () => toast.error("Failed to archive"),
+      onSuccess: () => toast.success(t(($) => $.toast.archived)),
+      onError: () => toast.error(t(($) => $.toast.archive_failed)),
     });
   };
 
   const handleRestore = () => {
     restoreArtifact.mutate(artifact.id, {
-      onSuccess: () => toast.success("Restored"),
-      onError: () => toast.error("Failed to restore"),
+      onSuccess: () => toast.success(t(($) => $.toast.restored)),
+      onError: () => toast.error(t(($) => $.toast.restore_failed)),
     });
   };
 
   const handleDelete = () => {
-    if (
-      !window.confirm(
-        "Permanently delete this artifact? This cannot be undone.",
-      )
-    ) {
+    if (!window.confirm(t(($) => $.detail.delete_confirm))) {
       return;
     }
     deleteArtifact.mutate(artifact.id, {
       onSuccess: () => {
-        toast.success("Deleted");
+        toast.success(t(($) => $.toast.deleted));
         router.push(wsPaths.memory());
       },
-      onError: () => toast.error("Failed to delete"),
+      onError: () => toast.error(t(($) => $.toast.delete_failed)),
     });
   };
 
@@ -159,23 +156,23 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Memory</span>
+          <span>{t(($) => $.detail.back)}</span>
         </AppLink>
         <div className="flex items-center gap-2">
           {isArchived && (
             <span className="text-[10px] uppercase tracking-wider rounded bg-muted px-2 py-0.5 text-muted-foreground">
-              Archived
+              {t(($) => $.detail.archived_badge)}
             </span>
           )}
           {isArchived ? (
             <Button size="sm" variant="outline" onClick={handleRestore}>
               <ArchiveRestore className="h-3.5 w-3.5 mr-1" />
-              Restore
+              {t(($) => $.detail.restore)}
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={handleArchive}>
               <Archive className="h-3.5 w-3.5 mr-1" />
-              Archive
+              {t(($) => $.detail.archive)}
             </Button>
           )}
           <DropdownMenu>
@@ -192,7 +189,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
                 className="text-destructive focus:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Delete forever
+                {t(($) => $.detail.delete_forever)}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -207,7 +204,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
               KIND_BADGE[artifact.kind],
             )}
           >
-            {MEMORY_KIND_LABELS[artifact.kind]}
+            {t(($) => $.kind[artifact.kind])}
           </span>
           {/* Inline title — TitleEditor commits on blur/Enter. We rely on
               the optimistic updateArtifact mutation to keep the displayed
@@ -216,7 +213,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
           <TitleEditor
             key={artifact.id}
             defaultValue={titleDraft}
-            placeholder="Untitled"
+            placeholder={t(($) => $.detail.untitled_placeholder)}
             className="text-2xl font-semibold"
             onChange={setTitleDraft}
             onSubmit={() => saveTitle(titleDraft)}
@@ -232,7 +229,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
             <span>{authorName}</span>
             <span>·</span>
             <span>
-              Updated {new Date(artifact.updated_at).toLocaleDateString()}
+              {t(($) => $.detail.updated_prefix)} {new Date(artifact.updated_at).toLocaleDateString()}
             </span>
             {artifact.tags.length > 0 && (
               <>
@@ -256,7 +253,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
               key={artifact.id}
               ref={contentRef}
               defaultValue={artifact.content}
-              placeholder="Start writing..."
+              placeholder={t(($) => $.detail.content_placeholder)}
               onUpdate={saveContent}
               debounceMs={1000}
             />
