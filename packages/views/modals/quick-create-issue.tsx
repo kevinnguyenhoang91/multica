@@ -116,10 +116,10 @@ export function AgentCreatePanel({
   // daemons handle attachments and partial-failure retries incorrectly
   // (see PR #1851 / MUL-1496). Pre-check on the picker so the user gets
   // immediate feedback instead of waiting for the inbox failure; the
-  // server re-validates as the trust boundary. Skipped in dev builds so
-  // local source-built daemons (which report a `git describe` version
-  // like v0.2.15-N-gHASH that parses below the threshold) don't get
-  // blocked during testing — server has the matching APP_ENV bypass.
+  // server re-validates as the trust boundary. Dev-built daemons
+  // (git-describe shape) are exempted inside checkQuickCreateCliVersion
+  // — frontend and server share the same signal there, so they agree by
+  // construction across web/desktop/staging without comparing env flags.
   const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
   const selectedRuntime = useMemo(
     () =>
@@ -132,8 +132,7 @@ export function AgentCreatePanel({
     () => checkQuickCreateCliVersion(readRuntimeCliVersion(selectedRuntime?.metadata)),
     [selectedRuntime?.metadata],
   );
-  const versionBlocked =
-    process.env.NODE_ENV === "production" && versionCheck.state !== "ok";
+  const versionBlocked = versionCheck.state !== "ok";
 
   const initialPrompt = (data?.prompt as string) || promptDraft;
   // The editor is uncontrolled — we read the latest markdown via the ref at

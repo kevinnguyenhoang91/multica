@@ -936,15 +936,12 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 	// handling, no-retry on partial failure). Older daemons either
 	// double-create issues on partial CLI failures or mishandle pasted
 	// screenshot URLs; fail closed before enqueuing rather than surface
-	// the breakage as an inbox failure twenty seconds later. Skipped in
-	// non-production environments so local dev daemons (which report a
-	// `git describe` version like v0.2.15-N-gHASH that parses below the
-	// threshold) don't get blocked during testing.
-	if isProductionEnv() {
-		if status, payload := h.checkQuickCreateDaemonVersion(r.Context(), agent.RuntimeID); status != 0 {
-			writeJSON(w, status, payload)
-			return
-		}
+	// the breakage as an inbox failure twenty seconds later. Dev-built
+	// daemons (git-describe shape) are exempted inside CheckMinCLIVersion
+	// so `make daemon` works without weakening staging or production.
+	if status, payload := h.checkQuickCreateDaemonVersion(r.Context(), agent.RuntimeID); status != 0 {
+		writeJSON(w, status, payload)
+		return
 	}
 
 	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, prompt)
