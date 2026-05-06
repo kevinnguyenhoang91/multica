@@ -36,9 +36,9 @@ type failureMonitorConfig struct {
 
 func defaultFailureMonitorConfig() failureMonitorConfig {
 	return failureMonitorConfig{
-		Interval:     30 * time.Minute,
+		Interval:     24 * time.Hour,
 		Lookback:     7 * 24 * time.Hour,
-		MinRuns:      100,
+		MinRuns:      50,
 		FailRatio:    0.9,
 		StartupDelay: 1 * time.Minute,
 	}
