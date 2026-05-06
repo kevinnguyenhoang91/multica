@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -109,6 +110,34 @@ func TestBuildWorkspaceUpdateBody(t *testing.T) {
 		want := "first\nsecond line with literal \\n"
 		if got["context"] != want {
 			t.Errorf("context = %q, want %q", got["context"], want)
+		}
+	})
+
+	t.Run("empty issue-prefix is rejected", func(t *testing.T) {
+		resetWorkspaceUpdateFlags(t)
+		setStringFlag(t, "issue-prefix", "")
+		// Force Changed=true so the flag is treated as "explicitly passed".
+		if f := workspaceUpdateCmd.Flags().Lookup("issue-prefix"); f != nil {
+			f.Changed = true
+		}
+
+		_, err := buildWorkspaceUpdateBody(workspaceUpdateCmd)
+		if err == nil {
+			t.Fatalf("expected error when --issue-prefix is empty")
+		}
+		if !strings.Contains(err.Error(), "cannot be empty") {
+			t.Errorf("error = %q, want it to mention 'cannot be empty'", err)
+		}
+	})
+
+	t.Run("whitespace-only issue-prefix is rejected", func(t *testing.T) {
+		resetWorkspaceUpdateFlags(t)
+		setStringFlag(t, "issue-prefix", "   ")
+		if f := workspaceUpdateCmd.Flags().Lookup("issue-prefix"); f != nil {
+			f.Changed = true
+		}
+		if _, err := buildWorkspaceUpdateBody(workspaceUpdateCmd); err == nil {
+			t.Fatalf("expected error when --issue-prefix is whitespace-only")
 		}
 	})
 

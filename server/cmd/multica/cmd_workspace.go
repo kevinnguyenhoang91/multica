@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 	"unicode/utf8"
@@ -174,6 +175,12 @@ func buildWorkspaceUpdateBody(cmd *cobra.Command) (map[string]any, error) {
 	}
 	if cmd.Flags().Changed("issue-prefix") {
 		v, _ := cmd.Flags().GetString("issue-prefix")
+		// The handler silently skips an empty prefix (workspace.go:274), so
+		// `--issue-prefix ""` would otherwise return 200 without changing
+		// anything. Reject it here so the failure is visible.
+		if strings.TrimSpace(v) == "" {
+			return nil, fmt.Errorf("--issue-prefix cannot be empty; clearing the prefix is not supported")
+		}
 		body["issue_prefix"] = v
 	}
 	return body, nil

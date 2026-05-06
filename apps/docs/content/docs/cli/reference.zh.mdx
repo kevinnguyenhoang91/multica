@@ -233,9 +233,9 @@ cat <<'CTX' | multica workspace update <workspace-id> --context-stdin
 CTX
 ```
 
-可编辑字段：`--name`、`--description` / `--description-stdin`、`--context` / `--context-stdin`、`--issue-prefix`。`slug` 创建后只读，不暴露在 CLI。`--description` 与 `--description-stdin`（以及 `context` 同名对）互斥。未传任何字段 flag 时命令拒绝执行，避免空 PATCH 触发无意义的 workspace 更新事件。
+可编辑字段：`--name`、`--description` / `--description-stdin`、`--context` / `--context-stdin`、`--issue-prefix`。`slug` 创建后只读，不暴露在 CLI。`--description` 与 `--description-stdin`（以及 `context` 同名对）互斥。未传任何字段 flag 时命令拒绝执行，避免空 PATCH 触发无意义的 workspace 更新事件。`--issue-prefix ""` 也会被拒绝：当前后端在 prefix 为空时静默跳过该字段，CLI 在本地拦下避免“看似成功的 no-op”。
 
-
+## Issues
 
 ### List Issues
 
