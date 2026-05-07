@@ -75,13 +75,22 @@ func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error 
 // buildMetaSkillContent generates the meta skill markdown that teaches the agent
 // about the Multica runtime environment and available CLI tools.
 //
-// Section ordering is tuned for prompt-cache prefix matching: globally and
-// per-agent stable content comes first, per-workspace stable next, per-issue
-// content (Project Context, Workflow with the issue ID) last. When the same
-// agent processes consecutive issues in the same workspace the entire prefix
-// up to "## Repositories" stays byte-identical and hits the provider's prompt
-// prefix cache. Adding a new section: place it according to its variability
-// class — never insert per-issue values into the stable prefix.
+// Section ordering is tuned for prompt-cache prefix matching. Three variability
+// classes, all stable classes first:
+//   - Globally / per-agent stable: Header, Agent Identity, Available Commands,
+//     Skills, Codex notes, Mentions, Attachments, Important, Output. These
+//     bytes never depend on the issue.
+//   - Per-issue dynamic suffix: Repositories, Project Context, Workflow.
+//     Repositories is dynamic because handler/daemon.go lifts the issue's
+//     project github_repo resources into task.Repos when the project has any
+//     attached, overriding workspace-level repos (see daemon.go ~line 1013).
+//     Project Context renders only when the issue has a project. Workflow
+//     embeds the issue ID and trigger comment ID.
+//
+// The first dynamic header acts as the cache boundary; everything before it
+// is byte-identical for the same agent regardless of which issue is claimed.
+// Adding a new section: classify it correctly — never insert per-issue values
+// into the stable prefix, and never put a stable section after a dynamic one.
 func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	var b strings.Builder
 
@@ -238,7 +247,14 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 		b.WriteString("When referencing an issue in a comment, use the issue mention format `[MUL-123](mention://issue/<issue-id>)` so it renders as a clickable link. (Issue mentions have no side effect; only member/agent mentions do — see the Mentions section above.)\n\n")
 	}
 
-	// Inject available repositories section. Per-workspace stable.
+	// === Per-issue dynamic suffix begins here. ===
+	//
+	// Repositories is workspace-scoped most of the time, but
+	// handler/daemon.go overrides task.Repos with the issue's project
+	// github_repo resources when the project has any attached. So the
+	// rendered list can vary per issue. Keep this section in the dynamic
+	// suffix so the stable prefix above is never invalidated by a project
+	// switch.
 	if len(ctx.Repos) > 0 {
 		b.WriteString("## Repositories\n\n")
 		b.WriteString("The following code repositories are available in this workspace.\n")
