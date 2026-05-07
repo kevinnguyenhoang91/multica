@@ -546,19 +546,20 @@ const runtimeLivenessTTL = 90 * time.Second
 // not false-positive on alive-but-Redis-only runtimes.
 //
 // Load-bearing invariant: this must be strictly less than the sweeper's
-// stale threshold (700s in cmd/server/runtime_sweeper.go) MINUS one daemon
+// stale threshold (150s in cmd/server/runtime_sweeper.go) MINUS one daemon
 // heartbeat cycle (~15s) MINUS the BatchedHeartbeatScheduler tick interval
-// (~60s). Worst-case DB age for an alive runtime is therefore bounded by
-// flush + heartbeat + batchTick = 600 + 15 + 60 = 675s, leaving a 25s buffer
-// below the 700s stale window. If you tune any of these constants, recompute
+// (~30s). Worst-case DB age for an alive runtime is therefore bounded by
+// flush + heartbeat + batchTick = 60 + 15 + 30 = 105s, leaving a 45s buffer
+// below the 150s stale window. If you tune any of these constants, recompute
 // the chain and keep at least a one-tick buffer.
 //
-// At the default 15s daemon heartbeat cadence, a 600s flush means each
-// runtime writes the DB roughly once every 40 beats — a ~40x reduction
-// versus rewriting on every beat. Combined with batched coalescing (see
-// HeartbeatScheduler), the practical DB transaction count for the entire
-// fleet collapses from O(N · beats) to O(1) per batch tick.
-const runtimeHeartbeatDBFlushInterval = 600 * time.Second
+// We intentionally keep the per-runtime flush throttle at 60s (rather than
+// pushing it higher) so a crashed runtime is detected within ~150s instead
+// of ~10 minutes. The bulk of the DB-pressure win comes from batched
+// coalescing in HeartbeatScheduler — at 70 online runtimes that collapses
+// ~17 single-row UPDATE/s into ~0.03 bulk UPDATE/s (one per batch tick),
+// independent of how the per-runtime throttle is tuned.
+const runtimeHeartbeatDBFlushInterval = 60 * time.Second
 
 func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()

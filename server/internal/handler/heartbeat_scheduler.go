@@ -96,9 +96,9 @@ type BatchedHeartbeatScheduler struct {
 // DefaultHeartbeatBatchInterval is the production tick cadence for the
 // BatchedHeartbeatScheduler. Chosen so the load-bearing chain
 // `flushInterval + heartbeatInterval + tickInterval < staleThresholdSeconds`
-// holds with a comfortable buffer (600 + 15 + 60 = 675 < 700). Lengthening
+// holds with a comfortable buffer (60 + 15 + 30 = 105 < 150). Lengthening
 // this requires bumping staleThresholdSeconds in lockstep.
-const DefaultHeartbeatBatchInterval = 60 * time.Second
+const DefaultHeartbeatBatchInterval = 30 * time.Second
 
 func NewBatchedHeartbeatScheduler(queries *db.Queries, tickInterval time.Duration) *BatchedHeartbeatScheduler {
 	if tickInterval <= 0 {
