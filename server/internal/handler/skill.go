@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -466,15 +467,25 @@ type importedFile struct {
 	content string
 }
 
+// errImportCapExceeded marks an error caused by a per-file or per-bundle cap.
+// Such errors must abort the import — silently dropping a file would otherwise
+// produce an incomplete skill that looks valid to the user.
+var errImportCapExceeded = errors.New("import cap exceeded")
+
+// isCapError reports whether err is (or wraps) errImportCapExceeded.
+func isCapError(err error) bool {
+	return errors.Is(err, errImportCapExceeded)
+}
+
 // addFile appends a supporting file while enforcing the per-bundle caps. It
 // returns an error when either the file count or aggregate byte budget would
 // be exceeded so the caller fails the import instead of silently truncating.
 func (s *importedSkill) addFile(path, content string) error {
 	if len(s.files) >= maxImportFileCount {
-		return fmt.Errorf("import bundle exceeds %d file limit", maxImportFileCount)
+		return fmt.Errorf("%w: import bundle exceeds %d file limit", errImportCapExceeded, maxImportFileCount)
 	}
 	if s.bundleSize+len(content) > maxImportTotalSize {
-		return fmt.Errorf("import bundle exceeds %d byte limit", maxImportTotalSize)
+		return fmt.Errorf("%w: import bundle exceeds %d byte limit", errImportCapExceeded, maxImportTotalSize)
 	}
 	s.bundleSize += len(content)
 	s.files = append(s.files, importedFile{path: path, content: content})
@@ -701,6 +712,12 @@ func fetchFromClawHub(httpClient *http.Client, rawURL string) (*importedSkill, e
 		}
 		body, err := fetchRawFile(httpClient, fileURL)
 		if err != nil {
+			// Cap violations must abort: silently dropping a file would
+			// produce an incomplete bundle that looks valid. SKILL.md is
+			// load-bearing, so any failure on it is fatal too.
+			if isCapError(err) || fp == "SKILL.md" {
+				return nil, fmt.Errorf("clawhub import: %s: %w", fp, err)
+			}
 			slog.Warn("clawhub import: file download failed", "path", fp, "error", err)
 			continue
 		}
@@ -711,6 +728,10 @@ func fetchFromClawHub(httpClient *http.Client, rawURL string) (*importedSkill, e
 		if err := result.addFile(fp, string(body)); err != nil {
 			return nil, err
 		}
+	}
+
+	if result.content == "" {
+		return nil, fmt.Errorf("clawhub import: SKILL.md is empty or missing for %s", slug)
 	}
 
 	return result, nil
@@ -840,6 +861,9 @@ func fetchFromSkillsSh(httpClient *http.Client, rawURL string) (*importedSkill, 
 		}
 		body, err := fetchRawFile(httpClient, entry.DownloadURL)
 		if err != nil {
+			if isCapError(err) {
+				return nil, fmt.Errorf("github import: %s: %w", entry.Path, err)
+			}
 			slog.Warn("github import: file download failed", "path", entry.Path, "error", err)
 			continue
 		}
@@ -1135,19 +1159,30 @@ type githubSpec struct {
 	repo     string
 	ref      string // empty → caller resolves the default branch
 	skillDir string // relative directory within the repo, "" for the repository root
+
+	// refSegments holds the raw path segments after /tree/ or /blob/ that
+	// jointly encode (ref, skillDir). GitHub's web URLs do not delimit the
+	// boundary between branch/tag name and in-repo path, so when a ref
+	// contains '/' (e.g. "release/v2") segments[0] alone is not the ref.
+	// fetchFromGitHub uses resolveGitHubRefAndPath to walk these segments
+	// and ask the API which prefix is a real branch/tag/commit. When this
+	// slice is empty, ref/skillDir above are authoritative (root URL).
+	refSegments []string
+	// kind is "tree" or "blob"; "" for root URLs. blob requires the last
+	// segment to be SKILL.md, which is already stripped from refSegments.
+	kind string
 }
 
-// parseGitHubURL extracts the owner, repo, ref, and skill directory from a
-// github.com URL. Supported forms:
+// parseGitHubURL extracts the owner, repo, and the raw post-/tree|/blob
+// segments from a github.com URL. Supported forms:
 //
 //	github.com/{owner}/{repo}                                → root, default branch
 //	github.com/{owner}/{repo}/tree/{ref}/{path...}           → ref / skill dir
 //	github.com/{owner}/{repo}/blob/{ref}/{path.../SKILL.md}  → ref / skill dir
 //
-// Branch and tag names containing '/' are not supported in this first version
-// because tree/blob URL paths become ambiguous between ref and skill path.
-// The caller will surface a clear error if the parsed ref does not actually
-// resolve to a branch/tag/commit (handled at fetch time, not here).
+// A simple-ref shortcut (segments[0] is the ref, the rest is the path) is
+// stored in spec.ref/spec.skillDir; refSegments is also populated so that
+// fetchFromGitHub can disambiguate refs containing '/' against the API.
 func parseGitHubURL(raw string) (githubSpec, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -1168,37 +1203,123 @@ func parseGitHubURL(raw string) (githubSpec, error) {
 	if len(parts) < 4 || parts[3] == "" {
 		return githubSpec{}, fmt.Errorf("missing ref after /%s/", kind)
 	}
-	spec.ref = parts[3]
-	rest := parts[4:]
+	spec.kind = kind
+	rest := parts[3:]
 	if kind == "blob" {
-		if len(rest) == 0 || !strings.EqualFold(rest[len(rest)-1], "SKILL.md") {
+		if !strings.EqualFold(rest[len(rest)-1], "SKILL.md") {
 			return githubSpec{}, fmt.Errorf("blob URL must point to a SKILL.md file")
 		}
 		rest = rest[:len(rest)-1]
-	}
-	if len(rest) > 0 {
-		// Decode URL-escaped segments (e.g. spaces) so the path matches the
-		// repo's real on-disk path. Re-escaping happens in buildRawGitHubURL.
-		decoded := make([]string, len(rest))
-		for i, p := range rest {
-			d, err := url.PathUnescape(p)
-			if err != nil {
-				return githubSpec{}, fmt.Errorf("invalid path segment %q: %w", p, err)
-			}
-			if d == "" {
-				return githubSpec{}, fmt.Errorf("empty path segment in skill directory")
-			}
-			decoded[i] = d
+		if len(rest) == 0 {
+			return githubSpec{}, fmt.Errorf("missing ref after /blob/")
 		}
-		spec.skillDir = strings.Join(decoded, "/")
+	}
+	// Decode URL-escaped segments (e.g. spaces) so paths match the repo's
+	// real on-disk layout. Re-escaping happens in buildRawGitHubURL.
+	decoded := make([]string, len(rest))
+	for i, p := range rest {
+		d, err := url.PathUnescape(p)
+		if err != nil {
+			return githubSpec{}, fmt.Errorf("invalid path segment %q: %w", p, err)
+		}
+		if d == "" {
+			return githubSpec{}, fmt.Errorf("empty path segment in URL")
+		}
+		decoded[i] = d
+	}
+	spec.refSegments = decoded
+	// Optimistic split: assume the simple case where the ref is one segment.
+	// fetchFromGitHub will re-resolve via the API and overwrite both fields
+	// when the optimistic guess does not validate (e.g. release/v2 refs).
+	spec.ref = decoded[0]
+	if len(decoded) > 1 {
+		spec.skillDir = strings.Join(decoded[1:], "/")
 	}
 	return spec, nil
+}
+
+// resolveGitHubRefAndPath walks the parsed refSegments and asks the GitHub
+// commits API which prefix corresponds to a real branch, tag, or commit.
+// This is what makes refs containing '/' (e.g. "release/v2") work correctly:
+// the URL github.com/o/r/tree/release/v2/skills/foo is ambiguous between
+// (ref=release, path=v2/skills/foo) and (ref=release/v2, path=skills/foo),
+// so we probe /repos/{o}/{r}/commits/{candidate} from longest to shortest
+// and accept the first one the server confirms exists.
+//
+// On success spec.ref and spec.skillDir are overwritten with the resolved
+// pair. On failure (no candidate resolves) a single error is returned that
+// names every candidate that was tried.
+func resolveGitHubRefAndPath(httpClient *http.Client, spec *githubSpec) error {
+	if len(spec.refSegments) == 0 {
+		return nil
+	}
+	// Try longest prefix first so that release/v2 wins over release.
+	tried := make([]string, 0, len(spec.refSegments))
+	for n := len(spec.refSegments); n >= 1; n-- {
+		candidate := strings.Join(spec.refSegments[:n], "/")
+		tried = append(tried, candidate)
+		ok, err := githubRefExists(httpClient, spec.owner, spec.repo, candidate)
+		if err != nil {
+			// Network / transport errors should not be silently treated as
+			// "ref does not exist" — surface them so the caller can retry.
+			return fmt.Errorf("validating ref %q: %w", candidate, err)
+		}
+		if ok {
+			spec.ref = candidate
+			if n == len(spec.refSegments) {
+				spec.skillDir = ""
+			} else {
+				spec.skillDir = strings.Join(spec.refSegments[n:], "/")
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("could not resolve ref in github.com/%s/%s URL — tried: %s. Make sure the branch, tag, or commit exists and that the URL is the canonical /tree/{ref}/{path} or /blob/{ref}/{path}/SKILL.md form",
+		spec.owner, spec.repo, strings.Join(tried, ", "))
+}
+
+// githubRefExists returns true when GitHub recognizes ref as a branch, tag,
+// or commit SHA on owner/repo. It uses the commits endpoint because that
+// single call accepts all three ref kinds (unlike /branches or /tags which
+// only match one). 404 means the ref does not exist; any other non-200
+// status is treated as an error so the caller can distinguish "missing"
+// from "API down".
+func githubRefExists(httpClient *http.Client, owner, repo, ref string) (bool, error) {
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s",
+		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(ref))
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return false, err
+	}
+	// Per GitHub docs: Accept: application/vnd.github.v3.sha returns just
+	// the SHA when the ref resolves, which is the cheapest possible probe.
+	req.Header.Set("Accept", "application/vnd.github.v3.sha")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound, http.StatusUnprocessableEntity:
+		return false, nil
+	default:
+		return false, fmt.Errorf("github API returned status %d for ref %q", resp.StatusCode, ref)
+	}
 }
 
 func fetchFromGitHub(httpClient *http.Client, rawURL string) (*importedSkill, error) {
 	spec, err := parseGitHubURL(rawURL)
 	if err != nil {
 		return nil, err
+	}
+	if len(spec.refSegments) > 0 {
+		// Disambiguate slash-bearing refs (release/v2 etc.) against the API
+		// before issuing any raw or contents requests.
+		if err := resolveGitHubRefAndPath(httpClient, &spec); err != nil {
+			return nil, err
+		}
 	}
 	if spec.ref == "" {
 		spec.ref = fetchGitHubDefaultBranch(httpClient, spec.owner, spec.repo)
@@ -1216,7 +1337,7 @@ func fetchFromGitHub(httpClient *http.Client, rawURL string) (*importedSkill, er
 			return nil, fmt.Errorf("SKILL.md not found at the root of %s/%s@%s. For multi-skill repositories, point to a specific directory using github.com/%s/%s/tree/%s/<skill-dir>",
 				spec.owner, spec.repo, spec.ref, spec.owner, spec.repo, spec.ref)
 		}
-		return nil, fmt.Errorf("SKILL.md not found at %s in %s/%s@%s: %w (note: branch or tag names containing '/' are not yet supported)",
+		return nil, fmt.Errorf("SKILL.md not found at %s in %s/%s@%s: %w",
 			skillMdPath, spec.owner, spec.repo, spec.ref, err)
 	}
 
@@ -1275,6 +1396,9 @@ func fetchFromGitHub(httpClient *http.Client, rawURL string) (*importedSkill, er
 		}
 		body, err := fetchRawFile(httpClient, entry.DownloadURL)
 		if err != nil {
+			if isCapError(err) {
+				return nil, fmt.Errorf("github import: %s: %w", entry.Path, err)
+			}
 			slog.Warn("github import: file download failed", "path", entry.Path, "error", err)
 			continue
 		}
@@ -1306,7 +1430,7 @@ func fetchRawFile(httpClient *http.Client, fileURL string) ([]byte, error) {
 		return nil, err
 	}
 	if len(body) > maxImportFileSize {
-		return nil, fmt.Errorf("file exceeds %d byte limit", maxImportFileSize)
+		return nil, fmt.Errorf("%w: file exceeds %d byte limit", errImportCapExceeded, maxImportFileSize)
 	}
 	return body, nil
 }

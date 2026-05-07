@@ -612,7 +612,8 @@ func TestParseGitHubURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parseGitHubURL: %v", err)
 			}
-			if got != tc.want {
+			if got.owner != tc.want.owner || got.repo != tc.want.repo ||
+				got.ref != tc.want.ref || got.skillDir != tc.want.skillDir {
 				t.Fatalf("got %+v, want %+v", got, tc.want)
 			}
 		})
@@ -634,6 +635,8 @@ func TestFetchFromGitHub_TreeURLImportsSkillDirectory(t *testing.T) {
 		switch r.Header.Get("X-Test-Original-Host") {
 		case "api.github.com":
 			switch r.URL.Path {
+			case "/repos/anthropics/skills/commits/main":
+				w.Write([]byte("deadbeef"))
 			case "/repos/anthropics/skills/contents/document-skills/pptx":
 				if got := r.URL.Query().Get("ref"); got != "main" {
 					t.Fatalf("contents ref = %q, want main", got)
@@ -796,6 +799,8 @@ func TestFetchFromGitHub_BlobURLImportsSpecificSkill(t *testing.T) {
 		switch r.Header.Get("X-Test-Original-Host") {
 		case "api.github.com":
 			switch r.URL.Path {
+			case "/repos/acme/skills/commits/main":
+				w.Write([]byte("deadbeef"))
 			case "/repos/acme/skills/contents/skills/foo":
 				writeJSON(w, http.StatusOK, []githubContentEntry{})
 			default:
@@ -839,6 +844,9 @@ func TestFetchRawFile_ReturnsErrorOnOversizedFile(t *testing.T) {
 	if !strings.Contains(err.Error(), "byte limit") {
 		t.Fatalf("error = %q, want byte limit message", err.Error())
 	}
+	if !isCapError(err) {
+		t.Fatalf("error %q must be classified as a cap error so callers fail-fast", err.Error())
+	}
 }
 
 func TestImportedSkill_AddFileEnforcesBundleLimits(t *testing.T) {
@@ -849,21 +857,189 @@ func TestImportedSkill_AddFileEnforcesBundleLimits(t *testing.T) {
 				t.Fatalf("addFile %d: %v", i, err)
 			}
 		}
-		if err := s.addFile("overflow", "x"); err == nil {
+		err := s.addFile("overflow", "x")
+		if err == nil {
 			t.Fatal("expected file count cap error")
+		}
+		if !isCapError(err) {
+			t.Fatalf("error %q must be a cap error", err.Error())
 		}
 	})
 	t.Run("total bytes", func(t *testing.T) {
 		s := &importedSkill{}
-		// Build one allowed file at the cap, then any extra byte must fail.
 		big := strings.Repeat("y", maxImportTotalSize)
 		if err := s.addFile("a", big); err != nil {
 			t.Fatalf("addFile at cap: %v", err)
 		}
-		if err := s.addFile("b", "x"); err == nil {
+		err := s.addFile("b", "x")
+		if err == nil {
 			t.Fatal("expected total bytes cap error")
 		}
+		if !isCapError(err) {
+			t.Fatalf("error %q must be a cap error", err.Error())
+		}
 	})
+}
+
+// fetchFromGitHub must FAIL the import (not just log+continue) when a
+// supporting file exceeds the per-file cap — silently dropping the file
+// would leave a skill bundle that looks valid to the user but is missing
+// content.
+func TestFetchFromGitHub_OversizedSupportingFileFailsImport(t *testing.T) {
+	client, _ := newGitHubFixtureClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Test-Original-Host") {
+		case "api.github.com":
+			switch r.URL.Path {
+			case "/repos/acme/skills/commits/main":
+				w.Write([]byte("deadbeef"))
+			case "/repos/acme/skills/contents/foo":
+				writeJSON(w, http.StatusOK, []githubContentEntry{
+					{
+						Name:        "huge.bin",
+						Path:        "foo/huge.bin",
+						Type:        "file",
+						DownloadURL: "https://raw.githubusercontent.com/acme/skills/main/foo/huge.bin",
+					},
+				})
+			default:
+				http.NotFound(w, r)
+			}
+		case "raw.githubusercontent.com":
+			switch r.URL.Path {
+			case "/acme/skills/main/foo/SKILL.md":
+				w.Write([]byte("---\nname: foo\n---\nbody"))
+			case "/acme/skills/main/foo/huge.bin":
+				w.Write(bytes.Repeat([]byte("z"), maxImportFileSize+512))
+			default:
+				http.NotFound(w, r)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	_, err := fetchFromGitHub(client, "https://github.com/acme/skills/tree/main/foo")
+	if err == nil {
+		t.Fatal("expected oversized supporting file to fail the whole import")
+	}
+	if !strings.Contains(err.Error(), "huge.bin") || !strings.Contains(err.Error(), "byte limit") {
+		t.Fatalf("error %q should name the file and the cap", err.Error())
+	}
+}
+
+// fetchFromSkillsSh has the same supporting-file loop and must also fail
+// (not just warn) when one of those files exceeds the cap.
+func TestFetchFromSkillsSh_OversizedSupportingFileFailsImport(t *testing.T) {
+	client, _ := newGitHubFixtureClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Test-Original-Host") {
+		case "api.github.com":
+			switch r.URL.Path {
+			case "/repos/acme/skills":
+				writeJSON(w, http.StatusOK, map[string]any{"default_branch": "main"})
+			case "/repos/acme/skills/contents/skills/foo":
+				writeJSON(w, http.StatusOK, []githubContentEntry{
+					{
+						Name:        "huge.bin",
+						Path:        "skills/foo/huge.bin",
+						Type:        "file",
+						DownloadURL: "https://raw.githubusercontent.com/acme/skills/main/skills/foo/huge.bin",
+					},
+				})
+			default:
+				http.NotFound(w, r)
+			}
+		case "raw.githubusercontent.com":
+			switch r.URL.Path {
+			case "/acme/skills/main/skills/foo/SKILL.md":
+				w.Write([]byte("---\nname: foo\n---\nbody"))
+			case "/acme/skills/main/skills/foo/huge.bin":
+				w.Write(bytes.Repeat([]byte("z"), maxImportFileSize+512))
+			default:
+				http.NotFound(w, r)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	_, err := fetchFromSkillsSh(client, "https://skills.sh/acme/skills/foo")
+	if err == nil {
+		t.Fatal("expected oversized supporting file to fail the whole import")
+	}
+	if !strings.Contains(err.Error(), "huge.bin") {
+		t.Fatalf("error %q should name the offending file", err.Error())
+	}
+}
+
+// Slash-bearing refs (e.g. release/v2) are now resolved against the API
+// instead of being silently parsed as ref="release", path="v2/...". The
+// resolver must walk longest→shortest and pick the prefix the API
+// confirms exists.
+func TestFetchFromGitHub_ResolvesSlashRefAgainstAPI(t *testing.T) {
+	client, requests := newGitHubFixtureClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Test-Original-Host") {
+		case "api.github.com":
+			switch r.URL.Path {
+			case "/repos/acme/skills/commits/release/v2/skills/foo",
+				"/repos/acme/skills/commits/release/v2/skills":
+				http.NotFound(w, r)
+			case "/repos/acme/skills/commits/release/v2":
+				w.Write([]byte("deadbeef"))
+			case "/repos/acme/skills/contents/skills/foo":
+				if got := r.URL.Query().Get("ref"); got != "release/v2" {
+					t.Fatalf("contents called with ref=%q, want release/v2", got)
+				}
+				writeJSON(w, http.StatusOK, []githubContentEntry{})
+			default:
+				http.NotFound(w, r)
+			}
+		case "raw.githubusercontent.com":
+			switch r.URL.Path {
+			case "/acme/skills/release/v2/skills/foo/SKILL.md":
+				w.Write([]byte("---\nname: foo\n---\nbody"))
+			default:
+				http.NotFound(w, r)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	result, err := fetchFromGitHub(client, "https://github.com/acme/skills/tree/release/v2/skills/foo")
+	if err != nil {
+		t.Fatalf("fetchFromGitHub: %v", err)
+	}
+	if result.origin["ref"] != "release/v2" {
+		t.Fatalf("origin ref = %v, want release/v2", result.origin["ref"])
+	}
+	if result.origin["path"] != "skills/foo" {
+		t.Fatalf("origin path = %v, want skills/foo", result.origin["path"])
+	}
+	// Sanity-check that the resolver actually probed in the expected order.
+	if !containsString(*requests, "api.github.com /repos/acme/skills/commits/release/v2/skills/foo") {
+		t.Fatalf("resolver should probe longest prefix first, requests=%v", *requests)
+	}
+}
+
+// When none of the candidate refs resolve, fail with a clear error that
+// names what was tried — do not silently fall back to using the first
+// segment as the ref (the previous behavior, which would import the wrong
+// branch / wrong path).
+func TestFetchFromGitHub_UnresolvableRefFailsLoudly(t *testing.T) {
+	client, _ := newGitHubFixtureClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Test-Original-Host") {
+		case "api.github.com":
+			http.NotFound(w, r)
+		case "raw.githubusercontent.com":
+			t.Fatalf("must not hit raw.githubusercontent.com when ref unresolved: %s", r.URL.Path)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	_, err := fetchFromGitHub(client, "https://github.com/acme/skills/tree/nope/skills/foo")
+	if err == nil {
+		t.Fatal("expected error when no candidate ref resolves")
+	}
+	if !strings.Contains(err.Error(), "could not resolve ref") {
+		t.Fatalf("error %q should mention ref resolution failure", err.Error())
+	}
 }
 
 type rewriteGitHubTransport struct {
