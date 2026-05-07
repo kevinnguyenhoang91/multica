@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
   Issue,
   MemberWithUser,
   Agent,
+  AgentTask,
   UpdateIssueRequest,
 } from "@multica/core/types";
 import { useAuthStore } from "@multica/core/auth";
@@ -14,6 +15,8 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useModalStore } from "@multica/core/modals";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
+import { issueKeys } from "@multica/core/issues/queries";
+import { api } from "@multica/core/api";
 import {
   memberListOptions,
   agentListOptions,
@@ -34,6 +37,7 @@ export interface UseIssueActionsResult {
   updateField: (updates: Partial<UpdateIssueRequest>) => void;
   togglePin: () => void;
   copyLink: () => Promise<void>;
+  copyWorkdirPath: () => Promise<void>;
   openCreateSubIssue: () => void;
   openSetParent: () => void;
   openAddChild: () => void;
@@ -81,6 +85,7 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
   const createPin = useCreatePin();
   const deletePin = useDeletePin();
   const openModal = useModalStore((s) => s.open);
+  const queryClient = useQueryClient();
 
   const issueId = issue?.id ?? null;
   const issueStatus = issue?.status ?? null;
@@ -134,6 +139,42 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
     }
   }, [paths, issueId, navigation, t]);
 
+  // Resolve the local workdir path of the issue's most recent task that
+  // recorded one (work_dir is pinned by the daemon when execution starts).
+  // The cache is shared with ExecutionLogSection — `issueKeys.tasks` —
+  // so we serve from cache when the user has the issue page open and fall
+  // back to a fresh fetch otherwise.
+  const copyWorkdirPath = useCallback(async () => {
+    if (!issueId) return;
+    let tasks = queryClient.getQueryData<AgentTask[]>(issueKeys.tasks(issueId));
+    if (!tasks) {
+      try {
+        tasks = await queryClient.fetchQuery({
+          queryKey: issueKeys.tasks(issueId),
+          queryFn: () => api.listTasksByIssue(issueId),
+          staleTime: 30_000,
+        });
+      } catch {
+        toast.error(t(($) => $.detail.workdir_path_copy_failed));
+        return;
+      }
+    }
+    const sorted = [...(tasks ?? [])].sort((a, b) =>
+      b.created_at.localeCompare(a.created_at),
+    );
+    const workDir = sorted.find((task) => !!task.work_dir)?.work_dir;
+    if (!workDir) {
+      toast.error(t(($) => $.detail.workdir_path_unavailable));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(workDir);
+      toast.success(t(($) => $.detail.workdir_path_copied));
+    } catch {
+      toast.error(t(($) => $.detail.workdir_path_copy_failed));
+    }
+  }, [issueId, queryClient, t]);
+
   const openCreateSubIssue = useCallback(() => {
     if (!issueId) return;
     openModal("create-issue", {
@@ -172,6 +213,7 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
     updateField,
     togglePin,
     copyLink,
+    copyWorkdirPath,
     openCreateSubIssue,
     openSetParent,
     openAddChild,
