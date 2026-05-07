@@ -158,11 +158,11 @@ The desktop app installed on a user's machine is older than any backend it talks
 
 When writing code that consumes an API response, follow these rules:
 
-- **Parse, don't cast.** Untyped JSON crossing the network is not `T`. The shared helper is `parseWithFallback` in `packages/core/api/schema.ts` — call it with a `zod` schema and an explicit fallback (empty array, empty page, etc.). A `safeParse` failure logs a warning and returns the fallback; it never throws into the UI.
-- **No bare `as` casts on response bodies.** `return res.json() as Promise<T>` inside `ApiClient.fetch` is the platform default, but every endpoint method whose response is consumed by UI logic (lists, paginated pages, derived booleans) must run through a schema before returning.
-- **Optional-chain and default everywhere downstream.** `res.entries?.length ?? 0`, not `res.entries.length`. `res.has_more_after === true` (explicit check), not `!res.has_more_after` (treats `undefined` and `null` as false silently).
-- **Don't pin a UI affordance to a single backend field.** If "Show earlier" depends purely on `has_more_before`, a backend bug deletes the button. Combine: `has_more_before === true || cursor != null || entries.length >= limit`. The button stays available in the worst case; users can still scroll up.
-- **Enum drift downgrades, not crashes.** When the backend introduces a new `status` or `type` value, the frontend should render a generic fallback, not crash a `switch` with no `default`.
+- **Parse, don't cast.** Untyped JSON crossing the network is not `T`. Use `parseWithFallback` in `packages/core/api/schema.ts` with a `zod` schema and an explicit fallback. On validation failure it logs a warning and returns the fallback; it never throws into the UI.
+- **No bare `as` casts on response bodies.** Every endpoint method whose response is consumed by UI logic must run through a schema before returning.
+- **Optional-chain and default everywhere downstream.** Treat every field as possibly missing. Use explicit boolean checks (`=== true`) over truthy/falsy negation, which silently treats `undefined` and `null` as `false`.
+- **Don't pin a UI affordance to a single backend field.** If a button or indicator depends on exactly one boolean from the server, a backend bug deletes it. Combine signals (cursor presence, page length, etc.) so the affordance stays available in the worst case.
+- **Enum drift downgrades, not crashes.** A new server-side enum value should render a generic fallback. `switch` statements on server-driven strings must have a `default` branch.
 - **When you add or change an endpoint:** add the schema in the same PR, and write at least one test that feeds a malformed response through it (missing field, wrong type, `null` array). The test fails closed if a future change breaks the contract.
 
 This is not premature defense — it is the *only* defense for an installed-app architecture. CSR-only browser apps can ship a fix in minutes; an Electron build sitting on a developer's laptop cannot.
