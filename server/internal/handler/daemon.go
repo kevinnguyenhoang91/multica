@@ -540,21 +540,25 @@ const runtimeLivenessTTL = 90 * time.Second
 
 // runtimeHeartbeatDBFlushInterval is the maximum staleness we tolerate on
 // agent_runtime.last_seen_at while Redis is the active liveness source. When
-// last_seen_at gets older than this, the heartbeat path forces a DB write so
-// (a) the UI's "last seen" display stays bounded and (b) the sweeper's
+// last_seen_at gets older than this, the heartbeat path schedules a DB write
+// so (a) the UI's "last seen" display stays bounded and (b) the sweeper's
 // DB-only fallback path (used when an IsAliveBatch call to Redis errors) does
 // not false-positive on alive-but-Redis-only runtimes.
 //
 // Load-bearing invariant: this must be strictly less than the sweeper's
-// stale threshold (90s in cmd/server/runtime_sweeper.go). DB age for an
-// alive runtime is bounded by flush + heartbeat_interval (~75s with 60s
-// flush + 15s daemon cadence), so a sweeper that falls back to the DB stale
-// window cannot mistakenly mark it offline.
+// stale threshold (700s in cmd/server/runtime_sweeper.go) MINUS one daemon
+// heartbeat cycle (~15s) MINUS the BatchedHeartbeatScheduler tick interval
+// (~60s). Worst-case DB age for an alive runtime is therefore bounded by
+// flush + heartbeat + batchTick = 600 + 15 + 60 = 675s, leaving a 25s buffer
+// below the 700s stale window. If you tune any of these constants, recompute
+// the chain and keep at least a one-tick buffer.
 //
-// At the default 15s daemon heartbeat cadence, a 60s flush means each
-// runtime writes the DB roughly once every four beats — a 4x reduction
-// versus rewriting on every beat.
-const runtimeHeartbeatDBFlushInterval = 60 * time.Second
+// At the default 15s daemon heartbeat cadence, a 600s flush means each
+// runtime writes the DB roughly once every 40 beats — a ~40x reduction
+// versus rewriting on every beat. Combined with batched coalescing (see
+// HeartbeatScheduler), the practical DB transaction count for the entire
+// fleet collapses from O(N · beats) to O(1) per batch tick.
+const runtimeHeartbeatDBFlushInterval = 600 * time.Second
 
 func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -684,6 +688,10 @@ func (h *Handler) HandleDaemonWSHeartbeat(ctx context.Context, identity daemonws
 // When LivenessStore is unavailable (no Redis configured) or any Touch call
 // errors, recordHeartbeat falls back to writing the DB on every beat — that
 // is the original behavior and keeps the sweeper's DB-only path correct.
+//
+// The actual DB write is delegated to h.HeartbeatScheduler so production can
+// coalesce many runtimes' bumps into one bulk UPDATE per tick. See
+// heartbeat_scheduler.go for the two implementations.
 func (h *Handler) recordHeartbeat(ctx context.Context, rt db.AgentRuntime) error {
 	now := time.Now()
 
@@ -711,29 +719,10 @@ func (h *Handler) recordHeartbeat(ctx context.Context, rt db.AgentRuntime) error
 		return nil
 	}
 
-	// Online rows take the cheap path: a single non-indexed column write
-	// that stays HOT-eligible. Only the offline→online transition (or a
-	// row that has never been seen) needs to flip status and updated_at.
-	//
-	// rt.Status was read from a prior SELECT and can race with the
-	// sweeper: between that SELECT and this UPDATE the sweeper might have
-	// flipped the row to offline. TouchAgentRuntimeLastSeen carries a
-	// status='online' predicate and reports affected rows, so we can
-	// detect the race (rows == 0) and recover via MarkAgentRuntimeOnline,
-	// matching the legacy UpdateAgentRuntimeHeartbeat behavior of always
-	// re-asserting online on every heartbeat.
-	if rt.Status == "online" && rt.LastSeenAt.Valid {
-		rows, err := h.Queries.TouchAgentRuntimeLastSeen(ctx, rt.ID)
-		if err != nil {
-			return err
-		}
-		if rows > 0 {
-			return nil
-		}
-		// Fall through: sweeper raced us to offline; flip back online.
-	}
-	_, err := h.Queries.MarkAgentRuntimeOnline(ctx, rt.ID)
-	return err
+	// Either bumps last_seen_at on an already-online row (Touch + race
+	// fallback) or flips status from offline to online. The scheduler
+	// chooses sync vs batched per case; see HeartbeatScheduler doc.
+	return h.HeartbeatScheduler.Schedule(ctx, rt)
 }
 
 // heartbeatMetrics carries per-stage timings out of processHeartbeat so the

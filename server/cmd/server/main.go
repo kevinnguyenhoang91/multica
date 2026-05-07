@@ -277,10 +277,17 @@ func main() {
 		}
 	}
 
+	// Construct the BatchedHeartbeatScheduler before the router so it can
+	// be injected into the Handler. The Run goroutine starts below
+	// alongside the sweeper, and Stop is called explicitly during graceful
+	// shutdown so any pending bumps are flushed before we exit.
+	heartbeatScheduler := handler.NewBatchedHeartbeatScheduler(queries, handler.DefaultHeartbeatBatchInterval)
+
 	r := NewRouterWithOptions(pool, hub, bus, analyticsClient, storeRedis, RouterOptions{
-		HTTPMetrics:  httpMetrics,
-		DaemonHub:    daemonHub,
-		DaemonWakeup: daemonWakeup,
+		HTTPMetrics:        httpMetrics,
+		DaemonHub:          daemonHub,
+		DaemonWakeup:       daemonWakeup,
+		HeartbeatScheduler: heartbeatScheduler,
 	})
 
 	srv := &http.Server{
@@ -306,6 +313,7 @@ func main() {
 
 	// Start background sweeper to mark stale runtimes as offline.
 	go runRuntimeSweeper(sweepCtx, queries, liveness, taskSvc, bus)
+	go heartbeatScheduler.Run(sweepCtx)
 	go runAutopilotScheduler(autopilotCtx, queries, autopilotSvc)
 	go runAutopilotFailureMonitor(autopilotCtx, queries, bus, envFailureMonitorConfig())
 	go runDBStatsLogger(sweepCtx, pool)
@@ -342,6 +350,11 @@ func main() {
 		os.Exit(1)
 	}
 	apiShutdownCancel()
+
+	// Drain any remaining queued heartbeat bumps. Run was already given
+	// the cancelled sweepCtx, which triggers its own drain — Stop just
+	// blocks until that drain completes so we don't race the process exit.
+	heartbeatScheduler.Stop()
 
 	if metricsServer != nil {
 		metricsShutdownCtx, metricsShutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
