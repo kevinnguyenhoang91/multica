@@ -14,6 +14,13 @@ import type { ListIssuesResponse, TimelinePage } from "../types";
 //     existing UI code already coerces them.
 //   - Arrays default to `[]` so a missing `reactions` / `attachments` /
 //     `entries` field doesn't take the page down.
+//   - Every object schema ends with `.loose()` so unknown server-side
+//     fields pass through unchanged. zod 4's `.object()` defaults to STRIP,
+//     which would silently delete fields the schema didn't explicitly list
+//     — fine while the TS type doesn't claim them, but the moment a future
+//     PR adds a TS field without updating the schema, the cast `as T` lies
+//     and the field shows up as `undefined` at runtime. `.loose()` removes
+//     that synchronisation hazard.
 //
 // These schemas are deliberately not typed as `z.ZodType<TimelineEntry>` /
 // `z.ZodType<Issue>` etc. — the strict TS types narrow string fields to
@@ -35,6 +42,13 @@ const AttachmentSchema = z.object({
   id: z.string(),
 }).loose();
 
+// All object schemas use `.loose()` so unknown server-side fields pass
+// through unchanged. zod 4's `.object()` defaults to STRIP, which would
+// silently drop new fields and surface as a "field neither showed up in
+// the UI" mystery the next time the TS type adopted them but the schema
+// wasn't updated in lock-step. `.loose()` removes that synchronisation
+// hazard — the schema validates the shape it knows about and leaves the
+// rest alone.
 const TimelineEntrySchema = z.object({
   type: z.string(),
   id: z.string(),
@@ -50,7 +64,7 @@ const TimelineEntrySchema = z.object({
   reactions: z.array(ReactionSchema).optional(),
   attachments: z.array(AttachmentSchema).optional(),
   coalesced_count: z.number().optional(),
-});
+}).loose();
 
 export const TimelinePageSchema = z.object({
   entries: z.array(TimelineEntrySchema).default([]),
@@ -59,7 +73,7 @@ export const TimelinePageSchema = z.object({
   has_more_before: z.boolean().default(false),
   has_more_after: z.boolean().default(false),
   target_index: z.number().optional(),
-});
+}).loose();
 
 export const EMPTY_TIMELINE_PAGE: TimelinePage = {
   entries: [],
@@ -81,7 +95,7 @@ export const CommentSchema = z.object({
   attachments: z.array(AttachmentSchema).default([]),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).loose();
 
 export const CommentsListSchema = z.array(CommentSchema);
 
@@ -106,12 +120,12 @@ const IssueSchema = z.object({
   labels: z.array(z.unknown()).optional(),
   created_at: z.string(),
   updated_at: z.string(),
-});
+}).loose();
 
 export const ListIssuesResponseSchema = z.object({
   issues: z.array(IssueSchema).default([]),
   total: z.number().default(0),
-});
+}).loose();
 
 export const EMPTY_LIST_ISSUES_RESPONSE: ListIssuesResponse = {
   issues: [],
@@ -124,10 +138,10 @@ const SubscriberSchema = z.object({
   user_id: z.string(),
   reason: z.string(),
   created_at: z.string(),
-});
+}).loose();
 
 export const SubscribersListSchema = z.array(SubscriberSchema);
 
 export const ChildIssuesResponseSchema = z.object({
   issues: z.array(IssueSchema).default([]),
-});
+}).loose();
