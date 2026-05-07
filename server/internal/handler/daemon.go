@@ -531,11 +531,18 @@ type DaemonHeartbeatRequest struct {
 // to claim, so we never start a claim we might have to abort.
 const heartbeatHasPendingTimeout = 1 * time.Second
 
-// runtimeLivenessTTL is how long a Redis liveness record stays valid. Set
-// equal to the runtime sweeper's stale threshold so a runtime that stops
-// heartbeating expires out of Redis at the same instant the DB stale window
-// would mark it offline. Anything shorter would create a window where Redis
-// says "dead" but the DB still says "online", confusing the sweeper filter.
+// runtimeLivenessTTL is how long a Redis liveness record stays valid before
+// expiring. The daemon refreshes it every heartbeat (~15s), so this just
+// needs to be a few heartbeats long — the value (90s) tolerates ~6 missed
+// beats before Redis declares the runtime dead.
+//
+// It is intentionally shorter than the sweeper's stale threshold (150s in
+// cmd/server/runtime_sweeper.go). That ordering is safe and desirable:
+// Redis can declare a runtime dead before the DB stale window opens, and
+// the sweeper will simply ignore it until the DB column also crosses the
+// threshold. The unsafe direction would be the opposite (Redis claiming
+// "alive" past the DB stale window, masking a truly dead runtime when the
+// sweeper consults Redis as the source of truth) — that cannot happen here.
 const runtimeLivenessTTL = 90 * time.Second
 
 // runtimeHeartbeatDBFlushInterval is the maximum staleness we tolerate on
