@@ -1286,7 +1286,7 @@ func resolveGitHubRefAndPath(httpClient *http.Client, spec *githubSpec) error {
 // from "API down".
 func githubRefExists(httpClient *http.Client, owner, repo, ref string) (bool, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s",
-		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(ref))
+		url.PathEscape(owner), url.PathEscape(repo), escapeRefPath(ref))
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return false, err
@@ -1325,7 +1325,7 @@ func fetchFromGitHub(httpClient *http.Client, rawURL string) (*importedSkill, er
 		spec.ref = fetchGitHubDefaultBranch(httpClient, spec.owner, spec.repo)
 	}
 	rawPrefix := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s",
-		url.PathEscape(spec.owner), url.PathEscape(spec.repo), url.PathEscape(spec.ref))
+		url.PathEscape(spec.owner), url.PathEscape(spec.repo), escapeRefPath(spec.ref))
 
 	skillMdPath := "SKILL.md"
 	if spec.skillDir != "" {
@@ -1433,6 +1433,18 @@ func fetchRawFile(httpClient *http.Client, fileURL string) ([]byte, error) {
 		return nil, fmt.Errorf("%w: file exceeds %d byte limit", errImportCapExceeded, maxImportFileSize)
 	}
 	return body, nil
+}
+
+// escapeRefPath percent-encodes each segment of a git ref individually so
+// that slash-bearing refs like "release/v2" are sent to GitHub as
+// "release/v2" (path separators preserved) rather than "release%2Fv2"
+// (which GitHub does not accept on the commits / raw endpoints).
+func escapeRefPath(ref string) string {
+	parts := strings.Split(ref, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
 }
 
 func buildRawGitHubURL(rawPrefix, repoPath string) string {
