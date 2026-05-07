@@ -2086,3 +2086,128 @@ func TestInjectRuntimeConfigMentionLoopHardening(t *testing.T) {
 		}
 	})
 }
+
+// TestInjectRuntimeConfigStablePrefixOrdering pins the prompt-cache-friendly
+// section ordering: every section that is stable across issues for the same
+// agent must appear before the per-issue Workflow (which embeds the issue ID).
+// Without this ordering the prompt prefix cache misses on every issue switch
+// because the dynamic Workflow block is buried in the middle of the prompt.
+// See MUL-1824.
+func TestInjectRuntimeConfigStablePrefixOrdering(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	ctx := TaskContextForEnv{
+		AgentName: "Lambda",
+		AgentID:   "agent-uuid",
+		IssueID:   "ISSUE-UUID-MARKER",
+		AgentSkills: []SkillContextForEnv{
+			{Name: "Coding", Content: "Write good code."},
+		},
+		Repos: []RepoContextForEnv{
+			{URL: "https://github.com/org/repo"},
+		},
+		ProjectID:    "project-uuid",
+		ProjectTitle: "Project A",
+	}
+	if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
+		t.Fatalf("InjectRuntimeConfig: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("read CLAUDE.md: %v", err)
+	}
+	s := string(data)
+
+	workflowPos := strings.Index(s, "### Workflow")
+	if workflowPos < 0 {
+		t.Fatalf("Workflow section missing")
+	}
+	issueIDPos := strings.Index(s, "ISSUE-UUID-MARKER")
+	if issueIDPos < 0 {
+		t.Fatalf("issue ID marker not found in CLAUDE.md")
+	}
+	if issueIDPos < workflowPos {
+		t.Fatalf("issue ID appears before Workflow header — Workflow must be the only section that contains the issue ID")
+	}
+
+	// Full-stable prefix sections (universal or per-agent stable) must come
+	// before any per-issue content.
+	stablePrefix := []string{
+		"## Available Commands",
+		"## Skills",
+		"## Mentions",
+		"## Attachments",
+		"## Important: Always Use the `multica` CLI",
+		"## Output",
+	}
+	for _, section := range stablePrefix {
+		pos := strings.Index(s, section)
+		if pos < 0 {
+			t.Errorf("missing section %q", section)
+			continue
+		}
+		if pos > workflowPos {
+			t.Errorf("stable section %q at offset %d appears after Workflow at offset %d — must come before per-issue content for prompt-cache friendliness", section, pos, workflowPos)
+		}
+	}
+
+	// Project Context is per-issue but, when present, must still come before
+	// Workflow (so Workflow stays the very last section).
+	projectPos := strings.Index(s, "## Project Context")
+	if projectPos < 0 {
+		t.Errorf("missing Project Context section")
+	} else if projectPos > workflowPos {
+		t.Errorf("Project Context at %d appears after Workflow at %d", projectPos, workflowPos)
+	}
+}
+
+// TestInjectRuntimeConfigPrefixIsByteAlignedAcrossIssues validates the core
+// prompt-cache property: when the same agent processes two different issues
+// in the same workspace, the bytes leading up to the dynamic Workflow section
+// must be byte-identical. If this regresses, prompt-prefix caches on the
+// provider side will miss on every issue switch.
+func TestInjectRuntimeConfigPrefixIsByteAlignedAcrossIssues(t *testing.T) {
+	t.Parallel()
+
+	build := func(t *testing.T, issueID string) string {
+		t.Helper()
+		dir := t.TempDir()
+		ctx := TaskContextForEnv{
+			AgentName: "Lambda",
+			AgentID:   "agent-uuid-1",
+			IssueID:   issueID,
+			AgentSkills: []SkillContextForEnv{
+				{Name: "Coding", Content: "Write good code."},
+			},
+			Repos: []RepoContextForEnv{
+				{URL: "https://github.com/org/repo"},
+			},
+		}
+		if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
+			t.Fatalf("InjectRuntimeConfig: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+		if err != nil {
+			t.Fatalf("read CLAUDE.md: %v", err)
+		}
+		return string(data)
+	}
+
+	a := build(t, "issue-aaaaaaaa")
+	b := build(t, "issue-bbbbbbbb")
+
+	aWorkflow := strings.Index(a, "### Workflow")
+	bWorkflow := strings.Index(b, "### Workflow")
+	if aWorkflow < 0 || bWorkflow < 0 {
+		t.Fatalf("Workflow section missing (a=%d b=%d)", aWorkflow, bWorkflow)
+	}
+	if aWorkflow != bWorkflow {
+		t.Fatalf("Workflow at different offsets: %d vs %d — prefix not byte-aligned", aWorkflow, bWorkflow)
+	}
+	if a[:aWorkflow] != b[:bWorkflow] {
+		t.Errorf("CLAUDE.md prefix differs between two issues for the same agent — prompt prefix cache cannot hit")
+	}
+	if a == b {
+		t.Errorf("CLAUDE.md is identical for two different issues — issue ID should appear in Workflow suffix")
+	}
+}
