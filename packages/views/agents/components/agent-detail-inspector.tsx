@@ -19,7 +19,7 @@ import {
 } from "@multica/core/agents";
 import { api } from "@multica/core/api";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
-import { timeAgo } from "@multica/core/utils";
+import { isImeComposing, timeAgo } from "@multica/core/utils";
 import { Button } from "@multica/ui/components/ui/button";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { Input } from "@multica/ui/components/ui/input";
@@ -456,6 +456,7 @@ function DescriptionEditorBody({
           rows={6}
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose();
+            if (isImeComposing(e)) return;
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
               void commit();
@@ -561,11 +562,14 @@ function InlineEditPopover({
               }}
               placeholder={placeholder}
               onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setOpen(false);
+                  return;
+                }
+                if (isImeComposing(e)) return;
                 if (e.key === "Enter") {
                   e.preventDefault();
                   void commit();
-                } else if (e.key === "Escape") {
-                  setOpen(false);
                 }
               }}
               className="h-8"
@@ -581,6 +585,7 @@ function InlineEditPopover({
               placeholder={placeholder}
               onKeyDown={(e) => {
                 if (e.key === "Escape") setOpen(false);
+                if (isImeComposing(e)) return;
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
                   void commit();
