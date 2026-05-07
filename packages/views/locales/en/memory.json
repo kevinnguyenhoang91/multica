@@ -1,0 +1,49 @@
+{
+  "page": {
+    "title": "Memory",
+    "new_artifact": "New artifact",
+    "filter_all": "All",
+    "search_placeholder": "Search memory...",
+    "empty_search": "No artifacts match your search",
+    "empty": "No memory artifacts yet",
+    "create_first": "Create your first artifact"
+  },
+  "kind": {
+    "wiki_page": "Wiki",
+    "agent_note": "Agent note",
+    "runbook": "Runbook",
+    "decision": "Decision"
+  },
+  "detail": {
+    "back": "Memory",
+    "archived_badge": "Archived",
+    "restore": "Restore",
+    "archive": "Archive",
+    "delete_forever": "Delete forever",
+    "untitled_placeholder": "Untitled",
+    "content_placeholder": "Start writing...",
+    "updated_prefix": "Updated",
+    "delete_confirm": "Permanently delete this artifact? This cannot be undone."
+  },
+  "modal": {
+    "title": "New Memory Artifact",
+    "breadcrumb_prefix": "New",
+    "close": "Close",
+    "title_placeholder": "Title",
+    "content_placeholder": "Start writing... (markdown supported)",
+    "create": "Create",
+    "creating": "Creating..."
+  },
+  "toast": {
+    "created": "Created",
+    "create_failed": "Failed to create artifact",
+    "title_update_failed": "Failed to update title",
+    "content_save_failed": "Failed to save content",
+    "archived": "Archived",
+    "archive_failed": "Failed to archive",
+    "restored": "Restored",
+    "restore_failed": "Failed to restore",
+    "deleted": "Deleted",
+    "delete_failed": "Failed to delete"
+  }
+}
