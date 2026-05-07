@@ -455,7 +455,10 @@ function DescriptionEditorBody({
           placeholder={t(($) => $.inspector.description_placeholder)}
           rows={6}
           onKeyDown={(e) => {
-            if (e.key === "Escape") onClose();
+            if (e.key === "Escape") {
+              onClose();
+              return;
+            }
             if (isImeComposing(e)) return;
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
@@ -584,7 +587,10 @@ function InlineEditPopover({
               }}
               placeholder={placeholder}
               onKeyDown={(e) => {
-                if (e.key === "Escape") setOpen(false);
+                if (e.key === "Escape") {
+                  setOpen(false);
+                  return;
+                }
                 if (isImeComposing(e)) return;
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
