@@ -340,9 +340,12 @@ func main() {
 	<-quit
 
 	slog.Info("shutting down server")
-	sweepCancel()
 	autopilotCancel()
 
+	// Order matters: drain in-flight HTTP first so any heartbeat handlers
+	// finish calling Schedule() before we stop the scheduler. Otherwise a
+	// late heartbeat could enqueue a pending ID after Run has already
+	// drained and exited, and Stop() would not flush it.
 	apiShutdownCtx, apiShutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := srv.Shutdown(apiShutdownCtx); err != nil {
 		apiShutdownCancel()
@@ -351,9 +354,9 @@ func main() {
 	}
 	apiShutdownCancel()
 
-	// Drain any remaining queued heartbeat bumps. Run was already given
-	// the cancelled sweepCtx, which triggers its own drain — Stop just
-	// blocks until that drain completes so we don't race the process exit.
+	// HTTP is fully drained — safe to stop the sweeper and flush the
+	// final batch of queued heartbeat bumps.
+	sweepCancel()
 	heartbeatScheduler.Stop()
 
 	if metricsServer != nil {

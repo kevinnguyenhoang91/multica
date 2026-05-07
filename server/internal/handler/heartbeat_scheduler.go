@@ -156,11 +156,19 @@ func (b *BatchedHeartbeatScheduler) Run(ctx context.Context) {
 
 // Stop signals the Run goroutine to drain and exit. Blocks until the final
 // flush completes so callers can sequence shutdown deterministically.
+//
+// As a defense-in-depth, Stop also performs one more flush after Run has
+// exited. This catches the rare case where Run already returned via its
+// ctx.Done() branch (e.g. parent ctx was cancelled before Stop was called)
+// and a late Schedule call has since added entries to the pending map.
 func (b *BatchedHeartbeatScheduler) Stop() {
 	b.stopOnce.Do(func() {
 		close(b.stopCh)
 	})
 	<-b.doneCh
+	finalCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	b.flushOnce(finalCtx)
+	cancel()
 }
 
 // FlushNow is exposed for tests that want to assert post-flush DB state

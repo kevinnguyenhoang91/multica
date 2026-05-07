@@ -132,6 +132,54 @@ func TestBatchedHeartbeatScheduler_StopDrains(t *testing.T) {
 	}
 }
 
+// TestBatchedHeartbeatScheduler_StopFlushesLateSchedule verifies the
+// defense-in-depth flush in Stop(): if Run already returned via ctx.Done()
+// and a heartbeat is then Schedule'd before Stop is called, that bump must
+// still hit the DB after Stop returns. This guards the production shutdown
+// race where in-flight HTTP heartbeats can call Schedule while sweepCtx is
+// already cancelled.
+func TestBatchedHeartbeatScheduler_StopFlushesLateSchedule(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+	runtimeID := createRuntimeLocalSkillTestRuntime(t, testUserID)
+	stale := time.Now().Add(-2 * time.Hour)
+	setRuntimeLastSeenAt(t, runtimeID, stale)
+	rt := loadRuntime(t, runtimeID)
+
+	sched := NewBatchedHeartbeatScheduler(testHandler.Queries, time.Hour)
+
+	runCtx, runCancel := context.WithCancel(context.Background())
+	go sched.Run(runCtx)
+
+	// Force Run to exit via ctx.Done() before any Schedule call. Wait for
+	// it to fully drain (which closes doneCh by reading it directly is
+	// awkward; instead, briefly poll on a separate Stop-less path). The
+	// simplest deterministic signal: cancel, then sleep just enough for
+	// the goroutine to hit the ctx.Done() branch and close doneCh.
+	runCancel()
+	time.Sleep(50 * time.Millisecond)
+
+	// Now Schedule a late heartbeat. Run is gone; only Stop's defensive
+	// flush can persist this.
+	if err := sched.Schedule(context.Background(), rt); err != nil {
+		t.Fatalf("Schedule: %v", err)
+	}
+	if got := sched.PendingCount(); got != 1 {
+		t.Fatalf("expected pending=1 before Stop, got %d", got)
+	}
+
+	sched.Stop()
+
+	if got := sched.PendingCount(); got != 0 {
+		t.Fatalf("expected pending=0 after Stop's defensive flush, got %d", got)
+	}
+	_, lastSeen, _ := readRuntimeRow(t, runtimeID)
+	if !lastSeen.After(stale.Add(time.Hour)) {
+		t.Fatalf("Stop did not flush late Schedule: stale=%s after=%s", stale, lastSeen)
+	}
+}
+
 // TestBatchedHeartbeatScheduler_FlushIgnoresEmpty exercises the empty-pending
 // fast path: a tick with nothing queued must not issue a DB call.
 func TestBatchedHeartbeatScheduler_FlushIgnoresEmpty(t *testing.T) {
