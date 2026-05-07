@@ -146,10 +146,26 @@ make start-worktree     # Start using .env.worktree
 - Go code follows standard Go conventions (gofmt, go vet).
 - Keep comments in code **English only**.
 - Prefer existing patterns/components over introducing parallel abstractions.
-- Unless the user explicitly asks for backwards compatibility, do **not** add compatibility layers, fallback paths, dual-write logic, legacy adapters, or temporary shims.
+- Unless the user explicitly asks for backwards compatibility, do **not** add compatibility layers, fallback paths, dual-write logic, legacy adapters, or temporary shims **for internal, non-boundary code** (a function calling another function in the same package, a component reading its own state, a store helper, etc.).
+- This rule does **not** apply at API boundaries: the desktop app cannot assume the backend it talks to has the same shape as the one it was built against (older desktop installs will outlive any given server build). API response handling must follow the rules in **API Response Compatibility** below — that is a defensive boundary, not a legacy shim.
 - If a flow or API is being replaced and the product is not yet live, prefer removing the old path instead of preserving both old and new behavior.
 - Avoid broad refactors unless required by the task.
 - New global (pre-workspace) routes MUST use a single word (`/login`, `/inbox`) or a `/{noun}/{verb}` pair (`/workspaces/new`). NEVER add hyphenated word-group root routes (`/new-workspace`, `/create-team`) — they collide with common user workspace names and force endless reserved-slug audits. Reserving the noun (`workspaces`) automatically protects the entire `/workspaces/*` subtree.
+
+### API Response Compatibility
+
+The desktop app installed on a user's machine is older than any backend it talks to: a user on 0.2.26 will hit a server running 0.3.x, then 0.4.x, then beyond. Every response shape is a contract that **will** drift, and the frontend must survive drift without white-screening. Three concrete incidents already happened from violating this — #2143, #2147, #2192.
+
+When writing code that consumes an API response, follow these rules:
+
+- **Parse, don't cast.** Untyped JSON crossing the network is not `T`. The shared helper is `parseWithFallback` in `packages/core/api/schema.ts` — call it with a `zod` schema and an explicit fallback (empty array, empty page, etc.). A `safeParse` failure logs a warning and returns the fallback; it never throws into the UI.
+- **No bare `as` casts on response bodies.** `return res.json() as Promise<T>` inside `ApiClient.fetch` is the platform default, but every endpoint method whose response is consumed by UI logic (lists, paginated pages, derived booleans) must run through a schema before returning.
+- **Optional-chain and default everywhere downstream.** `res.entries?.length ?? 0`, not `res.entries.length`. `res.has_more_after === true` (explicit check), not `!res.has_more_after` (treats `undefined` and `null` as false silently).
+- **Don't pin a UI affordance to a single backend field.** If "Show earlier" depends purely on `has_more_before`, a backend bug deletes the button. Combine: `has_more_before === true || cursor != null || entries.length >= limit`. The button stays available in the worst case; users can still scroll up.
+- **Enum drift downgrades, not crashes.** When the backend introduces a new `status` or `type` value, the frontend should render a generic fallback, not crash a `switch` with no `default`.
+- **When you add or change an endpoint:** add the schema in the same PR, and write at least one test that feeds a malformed response through it (missing field, wrong type, `null` array). The test fails closed if a future change breaks the contract.
+
+This is not premature defense — it is the *only* defense for an installed-app architecture. CSR-only browser apps can ship a fix in minutes; an Electron build sitting on a developer's laptop cannot.
 
 ### Backend Handler UUID Parsing Convention
 
