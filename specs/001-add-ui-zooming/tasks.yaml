@@ -1,0 +1,272 @@
+name: "add-ui-zooming"
+summary: >
+  8 tasks across 3 phases. Phase 1 creates the Zustand store and shared hook with unit tests.
+  Phase 2 adds the PreferencesTab UI with i18n and UI tests. Phase 3 wires useZoom() into
+  both app roots with one call each.
+
+relatedFeatures: []
+
+technologies:
+  - "TypeScript (strict mode)"
+  - "Zustand (persist middleware)"
+  - "React (useEffect)"
+  - "CSS zoom property"
+  - "Vitest + @testing-library/react"
+  - "i18next"
+
+relatedLinks:
+  - title: "MDN: zoom CSS property"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/zoom"
+  - title: "Zustand persist middleware docs"
+    url: "https://docs.pmnd.rs/zustand/integrations/persisting-store-data"
+
+tasks:
+  - id: task-1
+    phaseId: phase-1
+    title: "Create zoom-store.ts with ZoomLevel type and Zustand persist store"
+    description: >
+      Create packages/core/zoom-store.ts defining the ZoomLevel union literal type,
+      the ZOOM_LEVELS constant array, and a Zustand persist store using defaultStorage +
+      createPersistStorage. Export useZoomStore with zoomLevel state and setZoomLevel action.
+      Storage key: "multica_zoom_level". Default zoom: 1 (100%).
+    state: Todo
+    dependencies: []
+    acceptanceCriteria:
+      - "ZoomLevel type is a union literal: 0.8 | 0.9 | 1 | 1.1 | 1.25"
+      - "ZOOM_LEVELS is a readonly const array of all five ZoomLevel values"
+      - "useZoomStore().zoomLevel defaults to 1 when no persisted value exists"
+      - "useZoomStore().setZoomLevel(0.8) updates zoomLevel to 0.8"
+      - "Store persists under key 'multica_zoom_level' via createPersistStorage(defaultStorage)"
+      - "No direct localStorage usage — only StorageAdapter via createPersistStorage"
+      - "TypeScript strict mode: no any casts"
+    tdd:
+      red:
+        - "Create packages/core/zoom-store.test.ts"
+        - "Import useZoomStore from './zoom-store'"
+        - "Test 1: initial state — getState().zoomLevel === 1"
+        - "Test 2: setZoomLevel(0.8) — getState().zoomLevel === 0.8"
+        - "Test 3: setZoomLevel(1.25) — getState().zoomLevel === 1.25"
+        - "Test 4: persist config — store._persist?.getOptions().name === 'multica_zoom_level'"
+        - "Run pnpm --filter @multica/core exec vitest run zoom-store — expect failures (file does not exist)"
+      green:
+        - "Create packages/core/zoom-store.ts"
+        - "Define ZoomLevel union type and ZOOM_LEVELS array"
+        - "Create Zustand store with persist middleware using createJSONStorage(() => createPersistStorage(defaultStorage))"
+        - "Export useZoomStore"
+        - "Run tests — all green"
+      refactor:
+        - "Verify ZOOM_LEVELS is typed as readonly ZoomLevel[] or const satisfies ZoomLevel[]"
+        - "Ensure storage key is a named constant, not an inline string literal"
+    estimatedEffort: "45min"
+
+  - id: task-2
+    phaseId: phase-1
+    title: "Create use-zoom.ts shared hook applying CSS zoom to document root"
+    description: >
+      Create packages/core/use-zoom.ts exporting useZoom(). The hook reads zoomLevel from
+      useZoomStore and applies document.documentElement.style.zoom = String(zoomLevel) in
+      a useEffect. This is a side-effect-only hook (returns void). It has no UI dependency
+      and no framework-specific import.
+    state: Todo
+    dependencies:
+      - task-1
+    acceptanceCriteria:
+      - "useZoom() reads zoomLevel from useZoomStore via a selector"
+      - "useEffect sets document.documentElement.style.zoom = String(zoomLevel) on mount and on change"
+      - "Hook is in packages/core (zero react-dom, zero UI library imports)"
+      - "Hook returns void"
+      - "TypeScript strict mode satisfied"
+    tdd:
+      red:
+        - "Add tests to packages/core/zoom-store.test.ts (or a new use-zoom.test.ts)"
+        - "Mock document.documentElement.style using vi.stubGlobal or Object.defineProperty"
+        - "Test: render a component that calls useZoom(); assert document.documentElement.style.zoom === '1'"
+        - "Test: update store zoomLevel to 0.8; assert document.documentElement.style.zoom === '0.8'"
+        - "Run tests — expect failures (file does not exist)"
+      green:
+        - "Create packages/core/use-zoom.ts"
+        - "Import useZoomStore and useEffect from react"
+        - "Implement: const zoomLevel = useZoomStore(s => s.zoomLevel); useEffect(() => { document.documentElement.style.zoom = String(zoomLevel); }, [zoomLevel]);"
+        - "Run tests — all green"
+      refactor:
+        - "Confirm no additional state, no return value, no dependencies beyond zoomLevel"
+        - "Ensure the effect has the correct dependency array (only zoomLevel)"
+    estimatedEffort: "30min"
+
+  - id: task-3
+    phaseId: phase-1
+    title: "Export useZoomStore, ZoomLevel, ZOOM_LEVELS, and useZoom from packages/core/index.ts"
+    description: >
+      Add the four new exports from zoom-store.ts and use-zoom.ts to the packages/core barrel
+      export (index.ts). This makes them available to consumers via '@multica/core' import path,
+      consistent with how useAuthStore and other stores are exported.
+    state: Todo
+    dependencies:
+      - task-1
+      - task-2
+    acceptanceCriteria:
+      - "packages/core/index.ts exports useZoomStore"
+      - "packages/core/index.ts exports ZoomLevel type"
+      - "packages/core/index.ts exports ZOOM_LEVELS"
+      - "packages/core/index.ts exports useZoom"
+      - "Importing from '@multica/core' resolves to the correct implementations"
+      - "pnpm typecheck passes with no new errors"
+    tdd: null
+    estimatedEffort: "15min"
+
+  - id: task-4
+    phaseId: phase-2
+    title: "Add i18n strings for zoom section in English and Chinese locale files"
+    description: >
+      Add a 'zoom' key under 'preferences' in packages/views/locales/en/settings.json and
+      packages/views/locales/zh-Hans/settings.json. Keys: title, level_80, level_90,
+      level_100 (with Default annotation), level_110, level_125.
+    state: Todo
+    dependencies:
+      - task-3
+    acceptanceCriteria:
+      - "en/settings.json has preferences.zoom.title = 'Zoom'"
+      - "en/settings.json has preferences.zoom.level_80 through level_125"
+      - "en/settings.json has preferences.zoom.level_100 = '100% (Default)'"
+      - "zh-Hans/settings.json mirrors all keys from en/settings.json under preferences.zoom"
+      - "Chinese translations follow the glossary in apps/docs/content/docs/developers/conventions.zh.mdx"
+      - "JSON is valid (no trailing commas, correct nesting)"
+    tdd: null
+    estimatedEffort: "20min"
+
+  - id: task-5
+    phaseId: phase-2
+    title: "Add Zoom section UI to PreferencesTab using segmented radiogroup pattern"
+    description: >
+      Update packages/views/settings/components/preferences-tab.tsx to add a Zoom section
+      below the Language section. Use a div[role='radiogroup'] with button[role='radio'][aria-checked]
+      children for each ZOOM_LEVELS entry, styled identically to the existing language selector
+      (border-brand bg-brand/10 when active, border-border when inactive). Import useZoomStore
+      and ZOOM_LEVELS from '@multica/core'. Use useT() for i18n strings.
+    state: Todo
+    dependencies:
+      - task-3
+      - task-4
+    acceptanceCriteria:
+      - "Zoom section renders below Language section in PreferencesTab"
+      - "Five buttons render, one per ZOOM_LEVELS entry"
+      - "Active zoom level button has border-brand and bg-brand/10 classes"
+      - "Inactive buttons have border-border class"
+      - "Clicking a button calls useZoomStore().setZoomLevel with the correct ZoomLevel value"
+      - "Each button has role='radio' and aria-checked reflecting active state"
+      - "Section heading uses t('preferences.zoom.title') from i18n"
+      - "Button labels use the corresponding preferences.zoom.level_* i18n keys"
+      - "No new npm packages imported"
+      - "TypeScript strict mode satisfied"
+    tdd:
+      red:
+        - "Create packages/views/settings/components/preferences-tab.test.tsx"
+        - "Mock '@multica/core' with vi.hoisted() — mock useZoomStore following the vi.hoisted + Object.assign(selectorFn, { getState }) pattern"
+        - "Mock useT to return key as value (or use a simple i18n test wrapper)"
+        - "Test 1: renders 5 zoom level buttons"
+        - "Test 2: the button for current zoomLevel has aria-checked='true'"
+        - "Test 3: clicking a non-active button calls setZoomLevel with the correct ZoomLevel value"
+        - "Run pnpm --filter @multica/views exec vitest run preferences-tab — expect failures"
+      green:
+        - "Add zoom section JSX to preferences-tab.tsx below the language section"
+        - "Import useZoomStore and ZOOM_LEVELS from '@multica/core'"
+        - "Map ZOOM_LEVELS to buttons with correct aria attributes and Tailwind classes"
+        - "Wire onClick to setZoomLevel"
+        - "Add i18n key lookups via useT()"
+        - "Run tests — all green"
+      refactor:
+        - "Verify active styling matches the language selector exactly (same Tailwind classes)"
+        - "Ensure no inline magic numbers — all zoom values come from ZOOM_LEVELS"
+        - "Confirm no useState or extra context added (store is the state)"
+    estimatedEffort: "1h"
+
+  - id: task-6
+    phaseId: phase-2
+    title: "Write unit tests for zoom store covering persistence round-trip"
+    description: >
+      Extend packages/core/zoom-store.test.ts to cover the persist/rehydrate round-trip.
+      Simulate persisted state by pre-populating the storage mock before store initialization,
+      then verify the store rehydrates to the saved value.
+    state: Todo
+    dependencies:
+      - task-1
+    acceptanceCriteria:
+      - "Test verifies store initializes to 1 with no prior persisted data"
+      - "Test verifies store transitions correctly for each of the 5 zoom levels"
+      - "Test verifies that after setZoomLevel(0.8), the persisted JSON contains 0.8"
+      - "All tests pass in the packages/core Vitest Node environment (no DOM needed)"
+    tdd:
+      red:
+        - "Add rehydration test to packages/core/zoom-store.test.ts"
+        - "Use a fake storage object (plain JS object implementing StorageAdapter interface)"
+        - "Pre-populate storage with JSON for zoomLevel 1.25 before constructing the store"
+        - "Assert getState().zoomLevel === 1.25 after rehydration"
+        - "Run — expect failure (rehydration not yet tested)"
+      green:
+        - "Ensure persist middleware is configured with the correct storage and name"
+        - "Run tests — all green"
+      refactor:
+        - "Extract a createMockStorage helper if used in multiple tests"
+    estimatedEffort: "30min"
+
+  - id: task-7
+    phaseId: phase-3
+    title: "Call useZoom() in apps/web/components/web-providers.tsx"
+    description: >
+      Add a single useZoom() call inside the WebProviders client component. WebProviders is
+      already a 'use client' component — this is the correct boundary for a DOM side-effect
+      hook in Next.js App Router. Import useZoom from '@multica/core'.
+    state: Todo
+    dependencies:
+      - task-2
+      - task-3
+    acceptanceCriteria:
+      - "useZoom() is called inside WebProviders (or a component it renders)"
+      - "No new files created — change is limited to web-providers.tsx"
+      - "The import comes from '@multica/core'"
+      - "pnpm typecheck passes for apps/web"
+      - "No 'use client' directive added to any new file (WebProviders is already client)"
+    tdd: null
+    estimatedEffort: "15min"
+
+  - id: task-8
+    phaseId: phase-3
+    title: "Call useZoom() in apps/desktop/src/renderer/src/App.tsx"
+    description: >
+      Add a single useZoom() call inside AppContent (or the appropriate client component) in
+      the desktop App.tsx. Import useZoom from '@multica/core'. No IPC or main-process changes.
+    state: Todo
+    dependencies:
+      - task-2
+      - task-3
+    acceptanceCriteria:
+      - "useZoom() is called inside AppContent or equivalent client component in App.tsx"
+      - "No new files created — change is limited to App.tsx"
+      - "The import comes from '@multica/core'"
+      - "pnpm typecheck passes for apps/desktop"
+      - "No Electron IPC or main-process code added"
+    tdd: null
+    estimatedEffort: "15min"
+
+totalEstimate: "3h 50min"
+openQuestions: []
+
+content: |
+  ## Summary
+
+  8 tasks across 3 phases implement the zoom feature end-to-end.
+
+  **Phase 1 (Store & Hook Foundation)** establishes the pure-logic layer: the Zustand persist
+  store with union-literal ZoomLevel type, the shared useZoom() DOM side-effect hook, and their
+  export from the packages/core barrel. Unit tests cover state transitions and persist round-trips.
+  This phase has no UI dependency and can be verified entirely in the Node test environment.
+
+  **Phase 2 (UI Integration)** adds the zoom section to PreferencesTab using the existing
+  language-selector radiogroup pattern — no new components or packages needed. i18n strings are
+  added to both English and Chinese locale files before the UI task, so the component can
+  reference them from the start. UI tests cover rendering, active-state highlighting, and
+  click-handler invocation.
+
+  **Phase 3 (App Root Wiring)** is intentionally last and intentionally minimal: one
+  `useZoom()` call in WebProviders (web) and one in AppContent (desktop). Both changes are
+  one-liners at the existing client boundary of each app. No new files, no new abstractions.

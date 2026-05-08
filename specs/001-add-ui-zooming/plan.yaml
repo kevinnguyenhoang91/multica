@@ -1,0 +1,170 @@
+name: "add-ui-zooming"
+summary: >
+  Implement a UI zoom level preference using three established codebase patterns:
+  a global Zustand persist store (packages/core), a shared useZoom() hook applying
+  CSS zoom to document.documentElement, and a segmented radiogroup button UI in
+  PreferencesTab matching the existing language selector. No new npm packages required.
+
+relatedFeatures: []
+
+technologies:
+  - "TypeScript (strict mode)"
+  - "Zustand (persist middleware + createJSONStorage)"
+  - "React (useEffect)"
+  - "CSS zoom property on document.documentElement"
+  - "StorageAdapter / createPersistStorage (packages/core/platform)"
+  - "defaultStorage (SSR-safe localStorage wrapper)"
+  - "i18next / useT (packages/views/i18n)"
+  - "Tailwind CSS (semantic tokens)"
+  - "Vitest + @testing-library/react"
+
+relatedLinks:
+  - title: "MDN: zoom CSS property"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/zoom"
+  - title: "Zustand persist middleware docs"
+    url: "https://docs.pmnd.rs/zustand/integrations/persisting-store-data"
+  - title: "Electron webContents.setZoomFactor (not used)"
+    url: "https://www.electronjs.org/docs/latest/api/web-contents#contentssetZoomFactorfactor"
+
+phases:
+  - id: phase-1
+    name: "Store & Hook Foundation"
+    description: >
+      Create the zoom Zustand persist store and shared useZoom() hook in packages/core.
+      This is the pure-logic foundation with zero UI dependency. Establishing this first
+      allows tests to verify state management and DOM side-effects in isolation before
+      any UI work begins.
+    parallel: false
+
+  - id: phase-2
+    name: "UI Integration"
+    description: >
+      Add the zoom section to PreferencesTab with a segmented radiogroup matching the
+      existing language selector pattern. Add i18n keys for both English and Chinese.
+      Depends on phase-1 (store must exist before the UI can import it).
+    parallel: false
+
+  - id: phase-3
+    name: "App Root Wiring"
+    description: >
+      Call useZoom() at the client boundary of both apps: WebProviders (web) and
+      AppContent (desktop). These are the smallest possible changes — one line each —
+      and are done last so they only land once the store and hook are verified.
+    parallel: false
+
+filesToCreate:
+  - "packages/core/zoom-store.ts"
+  - "packages/core/use-zoom.ts"
+  - "packages/core/zoom-store.test.ts"
+  - "packages/views/settings/components/preferences-tab.test.tsx"
+
+filesToModify:
+  - "packages/core/index.ts"
+  - "packages/views/settings/components/preferences-tab.tsx"
+  - "packages/views/locales/en/settings.json"
+  - "packages/views/locales/zh-Hans/settings.json"
+  - "apps/web/components/web-providers.tsx"
+  - "apps/desktop/src/renderer/src/App.tsx"
+
+openQuestions: []
+
+content: |
+  ## Architecture Overview
+
+  The zoom feature is a thin layer on top of three patterns already established in the codebase:
+
+  1. **Zustand persist store** — identical structure to `useIssueDraftStore` but without workspace
+     scope. Uses `defaultStorage` + `createPersistStorage` (the same SSR-safe localStorage wrapper
+     used by the i18n language preference). Storage key: `"multica_zoom_level"`.
+
+  2. **Shared hook in packages/core** — `useZoom()` reads `useZoomStore` and writes
+     `document.documentElement.style.zoom` in a `useEffect`. This pattern is identical to how
+     `useDaemonIPCBridge` encapsulates a platform side-effect. Called once at each app's client
+     boundary, never duplicated.
+
+  3. **Segmented radiogroup UI** — the language selector in `PreferencesTab` (lines 208–228) is
+     the direct template: a `div[role="radiogroup"]` with `button[role="radio"][aria-checked]`
+     children, styled with `border-brand bg-brand/10` when active and `border-border` when
+     inactive. Zero new shadcn components needed.
+
+  ## Key Design Decisions
+
+  ### 1. Global persist store (not workspace-scoped)
+
+  Zoom is a per-device display preference, not workspace-specific data. Using
+  `createWorkspaceAwareStorage` would reset zoom on workspace switch — wrong behavior.
+  `defaultStorage` + `createPersistStorage` is the correct analogue (same as language preference).
+  No `registerForWorkspaceRehydration` call is needed.
+
+  ### 2. ZoomLevel as a union literal type
+
+  ```typescript
+  type ZoomLevel = 0.8 | 0.9 | 1 | 1.1 | 1.25;
+  const ZOOM_LEVELS: ZoomLevel[] = [0.8, 0.9, 1, 1.1, 1.25];
+  ```
+
+  Numeric factors (not percentage strings) map directly to `element.style.zoom` without conversion.
+  The `ZOOM_LEVELS` array is the single source of truth — adding a new level requires changing only
+  this array and the i18n strings (NFR-6).
+
+  ### 3. CSS zoom on document.documentElement
+
+  `document.documentElement.style.zoom = String(zoomLevel)` set in a `useEffect`. This:
+  - Scales the entire viewport including fixed/sticky elements (participates in layout)
+  - Works identically in Chromium (Electron renderer) and all modern browsers
+  - Requires zero IPC or main-process changes (NFR-2)
+  - Is the approach used by VS Code and Linear
+
+  Rejected alternatives: `transform: scale()` (breaks layout), Electron IPC (requires main-process
+  changes), CSS custom property (indirection without benefit).
+
+  ### 4. Web integration point: WebProviders, not layout.tsx
+
+  `apps/web/app/layout.tsx` is an async React Server Component — hooks cannot be called there.
+  `apps/web/components/web-providers.tsx` is the existing `"use client"` boundary that already
+  manages all client-side initialization (CoreProvider, QueryClient, etc.). Adding `useZoom()`
+  there is one line at the correct boundary with zero new abstractions.
+
+  ### 5. Segmented button group UI (not slider)
+
+  FR-8 explicitly mandates "a segmented button group matching the existing theme selector pattern."
+  The language selector in `PreferencesTab` is the direct template. Despite the spec's open-question
+  `answer` field saying "Slider," the functional requirement takes precedence and aligns with the
+  existing codebase visual language.
+
+  ### 6. i18n key structure
+
+  Discrete keys under `preferences.zoom.*` mirror the existing `themeOptions` / `languageOptions`
+  pattern. The 100% level needs a "(Default)" suffix which requires a distinct key:
+
+  ```json
+  "zoom": {
+    "title": "Zoom",
+    "level_80": "80%",
+    "level_90": "90%",
+    "level_100": "100% (Default)",
+    "level_110": "110%",
+    "level_125": "125%"
+  }
+  ```
+
+  ## Implementation Strategy
+
+  **Phase ordering rationale:** Store and hook first (phase 1) because the UI (phase 2) imports
+  the store, and the app wiring (phase 3) imports the hook. Each phase produces working,
+  independently testable artifacts before the next phase builds on them.
+
+  TDD approach: write the failing test, implement the minimal passing code, then refactor.
+  The store test (phase 1) runs in Node environment (no DOM). The UI test (phase 2) runs in
+  jsdom with `@testing-library/react`. Both live in the package where their code lives —
+  never in the app's test files (per CLAUDE.md testing rules).
+
+  ## Risk Mitigation
+
+  | Risk | Mitigation |
+  | ---- | ---------- |
+  | CSS zoom browser compatibility | CSS zoom is supported in all modern browsers and Electron's Chromium (same engine). MDN documents it as widely supported. |
+  | SSR hydration mismatch in web app | `defaultStorage` is the SSR-safe wrapper — it returns null on server, reads localStorage on client. No hydration mismatch. |
+  | Zustand persist rehydration timing | The `useEffect` in `useZoom()` depends on `zoomLevel` from the store. Zustand persist rehydrates synchronously from localStorage before first render. No flash of wrong zoom. |
+  | Breaking existing PreferencesTab | The zoom section is appended below the language section. No existing JSX is modified. Risk is nil. |
+  | Package boundary violations | Store in `packages/core` (zero react-dom, zero localStorage direct). Hook in `packages/core`. UI in `packages/views`. App wiring in respective apps. Matches all boundary rules. |
