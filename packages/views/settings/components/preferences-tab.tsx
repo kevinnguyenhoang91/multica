@@ -11,6 +11,12 @@ import {
 import { useLocaleAdapter } from "@multica/core/i18n/react";
 import { useAuthStore } from "@multica/core/auth";
 import { api } from "@multica/core/api";
+import {
+  useFontSizeStore,
+  FONT_SIZE_OPTIONS,
+  FONT_SIZE_LABELS,
+  type FontSizeOption,
+} from "@multica/core/font-size";
 import { useT } from "../../i18n";
 
 const LIGHT_COLORS = {
@@ -93,6 +99,8 @@ export function PreferencesTab() {
   const { t, i18n } = useT("settings");
   const localeAdapter = useLocaleAdapter();
   const user = useAuthStore((s) => s.user);
+  const fontSize = useFontSizeStore((s) => s.fontSize);
+  const setFontSize = useFontSizeStore((s) => s.setFontSize);
 
   // i18next.language can be a region-tagged BCP-47 string (e.g. "en-US",
   // "zh-Hans-CN") returned by intl-localematcher. Normalize to a supported
@@ -202,9 +210,49 @@ export function PreferencesTab() {
       </section>
 
       <section className="space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold">
+            {t(($) => $.preferences.font_size.title)}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t(($) => $.preferences.font_size.description)}
+          </p>
+        </div>
+        <div className="flex gap-2" role="radiogroup">
+          {FONT_SIZE_OPTIONS.map((opt) => {
+            const active = fontSize === opt;
+            return (
+              <button
+                key={opt}
+                role="radio"
+                aria-checked={active}
+                aria-label={`${opt}%`}
+                onClick={() => setFontSize(opt as FontSizeOption)}
+                className={cn(
+                  "flex min-w-[3rem] flex-col items-center gap-1 rounded-md border px-3 py-2 text-sm transition-colors",
+                  active
+                    ? "border-brand bg-brand/10 font-medium text-foreground"
+                    : "border-border text-muted-foreground hover:border-foreground/30",
+                )}
+              >
+                <span
+                  className="leading-none"
+                  style={{ fontSize: `${opt / 100}em` }}
+                >
+                  Aa
+                </span>
+                <span className="text-xs">{FONT_SIZE_LABELS[opt]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="space-y-4">
         <h2 className="text-sm font-semibold">
           {t(($) => $.preferences.language.title)}
         </h2>
+
         <div className="flex gap-3" role="radiogroup">
           {languageOptions.map((opt) => {
             const active = currentLocale === opt.value;

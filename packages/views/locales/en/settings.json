@@ -6,6 +6,10 @@
       "dark": "Dark",
       "system": "System"
     },
+    "font_size": {
+      "title": "Font Size",
+      "description": "Adjust the base font size used throughout the interface."
+    },
     "language": {
       "title": "Language",
       "english": "English",

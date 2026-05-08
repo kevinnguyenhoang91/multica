@@ -10,3 +10,9 @@
 @source "../../../packages/ui/**/*.{ts,tsx}";
 @source "../../../packages/core/**/*.{ts,tsx}";
 @source "../../../packages/views/**/*.{ts,tsx}";
+
+/* Font zoom: set by FontSizeApplier via JS; defaults to 1 (100%). */
+:root {
+  --font-zoom: 1;
+  font-size: calc(1rem * var(--font-zoom));
+}

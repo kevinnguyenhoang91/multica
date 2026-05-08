@@ -6,6 +6,10 @@
       "dark": "深色",
       "system": "跟随系统"
     },
+    "font_size": {
+      "title": "字体大小",
+      "description": "调整整个界面的基础字体大小。"
+    },
     "language": {
       "title": "语言",
       "english": "English",

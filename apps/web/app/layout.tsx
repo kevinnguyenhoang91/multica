@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
 import { cn } from "@multica/ui/lib/utils";
 import { WebProviders } from "@/components/web-providers";
+import { FontSizeApplier } from "@/components/font-size-applier";
 import {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
@@ -137,6 +138,7 @@ export default async function RootLayout({
       <body className="h-full overflow-hidden">
         <ThemeProvider>
           <WebProviders locale={locale} resources={resources}>
+            <FontSizeApplier />
             {children}
           </WebProviders>
           <Toaster />
