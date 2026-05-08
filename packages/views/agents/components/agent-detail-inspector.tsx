@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Camera, Loader2, Pencil } from "lucide-react";
+import { Camera, Loader2, Pencil, Smile, X } from "lucide-react";
 import { toast } from "sonner";
 import type {
   Agent,
@@ -35,6 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@multica/ui/components/ui/popover";
+import { EmojiPicker } from "@multica/ui/components/common/emoji-picker";
 import { PropRow } from "../../common/prop-row";
 import { availabilityConfig } from "../presence";
 import { CharCounter } from "./char-counter";
@@ -237,6 +238,7 @@ function AvatarEditor({
   const { t } = useT("agents");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { upload, uploading } = useFileUpload(api);
+  const [emojiOpen, setEmojiOpen] = useState(false);
 
   if (!canEdit) {
     return (
@@ -265,12 +267,30 @@ function AvatarEditor({
     }
   };
 
+  const handleEmojiSelect = async (emoji: string) => {
+    setEmojiOpen(false);
+    try {
+      await onUpdate({ icon: emoji });
+      toast.success(t(($) => $.inspector.avatar_updated_toast));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t(($) => $.inspector.avatar_upload_failed_toast));
+    }
+  };
+
+  const handleClearIcon = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await onUpdate({ icon: null });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t(($) => $.inspector.avatar_upload_failed_toast));
+    }
+  };
+
   return (
-    <>
+    <div className="flex items-end gap-2">
+      {/* Photo upload button */}
       <button
         type="button"
-        // rounded-lg matches the standard agent avatar treatment used in
-        // list rows. Avoid rounded-full — circles are reserved for humans.
         className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
@@ -297,7 +317,40 @@ function AvatarEditor({
         className="hidden"
         onChange={handleFile}
       />
-    </>
+
+      {/* Emoji icon picker */}
+      <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex h-7 items-center gap-1 rounded-md border bg-muted/50 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Set emoji icon"
+          >
+            {agent.icon ? (
+              <span className="text-base leading-none">{agent.icon}</span>
+            ) : (
+              <Smile className="h-3.5 w-3.5" />
+            )}
+            <span>{agent.icon ? "Change" : "Emoji"}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-0">
+          <EmojiPicker onSelect={handleEmojiSelect} />
+        </PopoverContent>
+      </Popover>
+
+      {/* Clear emoji icon button — only shown when an emoji is set */}
+      {agent.icon && (
+        <button
+          type="button"
+          onClick={(e) => void handleClearIcon(e)}
+          className="flex h-7 items-center gap-1 rounded-md border bg-muted/50 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Clear emoji icon"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -46,12 +46,13 @@ export function ActorAvatar({
   enableHoverCard,
   showStatusDot,
 }: ActorAvatarProps) {
-  const { getActorName, getActorInitials, getActorAvatarUrl } = useActorName();
+  const { getActorName, getActorInitials, getActorAvatarUrl, getActorIcon } = useActorName();
   const avatar = (
     <ActorAvatarBase
       name={getActorName(actorType, actorId)}
       initials={getActorInitials(actorType, actorId)}
       avatarUrl={getActorAvatarUrl(actorType, actorId)}
+      icon={getActorIcon(actorType, actorId)}
       isAgent={actorType === "agent"}
       size={size}
       className={className}

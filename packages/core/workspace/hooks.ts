@@ -41,5 +41,10 @@ export function useActorName() {
     return null;
   };
 
-  return { getMemberName, getAgentName, getActorName, getActorInitials, getActorAvatarUrl };
+  const getActorIcon = (type: string, id: string): string | null => {
+    if (type === "agent") return agents.find((a) => a.id === id)?.icon ?? null;
+    return null;
+  };
+
+  return { getMemberName, getAgentName, getActorName, getActorInitials, getActorAvatarUrl, getActorIcon };
 }

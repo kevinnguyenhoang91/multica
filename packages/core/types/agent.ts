@@ -110,6 +110,7 @@ export interface Agent {
   description: string;
   instructions: string;
   avatar_url: string | null;
+  icon: string | null;
   runtime_mode: AgentRuntimeMode;
   runtime_config: Record<string, unknown>;
   custom_env: Record<string, string>;
@@ -147,6 +148,7 @@ export interface CreateAgentRequest {
   description?: string;
   instructions?: string;
   avatar_url?: string;
+  icon?: string;
   runtime_id: string;
   runtime_config?: Record<string, unknown>;
   custom_env?: Record<string, string>;
@@ -165,6 +167,7 @@ export interface UpdateAgentRequest {
   description?: string;
   instructions?: string;
   avatar_url?: string;
+  icon?: string | null;
   runtime_id?: string;
   runtime_config?: Record<string, unknown>;
   custom_env?: Record<string, string>;

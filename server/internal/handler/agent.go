@@ -34,6 +34,7 @@ type AgentResponse struct {
 	Description        string              `json:"description"`
 	Instructions       string              `json:"instructions"`
 	AvatarURL          *string             `json:"avatar_url"`
+	Icon               *string             `json:"icon"`
 	RuntimeMode        string              `json:"runtime_mode"`
 	RuntimeConfig      any                 `json:"runtime_config"`
 	CustomEnv          map[string]string   `json:"custom_env"`
@@ -95,6 +96,7 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Description:        a.Description,
 		Instructions:       a.Instructions,
 		AvatarURL:          textToPtr(a.AvatarUrl),
+		Icon:               textToPtr(a.Icon),
 		RuntimeMode:        a.RuntimeMode,
 		RuntimeConfig:      rc,
 		CustomEnv:          customEnv,
@@ -351,6 +353,7 @@ type CreateAgentRequest struct {
 	Description        string            `json:"description"`
 	Instructions       string            `json:"instructions"`
 	AvatarURL          *string           `json:"avatar_url"`
+	Icon               *string           `json:"icon"`
 	RuntimeID          string            `json:"runtime_id"`
 	RuntimeConfig      any               `json:"runtime_config"`
 	CustomEnv          map[string]string `json:"custom_env"`
@@ -476,6 +479,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Description:        req.Description,
 		Instructions:       req.Instructions,
 		AvatarUrl:          ptrToText(req.AvatarURL),
+		Icon:               ptrToText(req.Icon),
 		RuntimeMode:        runtime.RuntimeMode,
 		RuntimeConfig:      rc,
 		RuntimeID:          runtime.ID,
@@ -527,6 +531,7 @@ type UpdateAgentRequest struct {
 	Description        *string            `json:"description"`
 	Instructions       *string            `json:"instructions"`
 	AvatarURL          *string            `json:"avatar_url"`
+	Icon               *string            `json:"icon"`
 	RuntimeID          *string            `json:"runtime_id"`
 	RuntimeConfig      any                `json:"runtime_config"`
 	CustomEnv          *map[string]string `json:"custom_env"`
@@ -623,6 +628,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AvatarURL != nil {
 		params.AvatarUrl = pgtype.Text{String: *req.AvatarURL, Valid: true}
+	}
+	if req.Icon != nil {
+		params.Icon = pgtype.Text{String: *req.Icon, Valid: true}
 	}
 	if req.RuntimeConfig != nil {
 		rc, _ := json.Marshal(req.RuntimeConfig)

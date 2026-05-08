@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Cloud, ChevronDown, Globe, Lock, Loader2 } from "lucide-react";
+import { Cloud, ChevronDown, Globe, Lock, Loader2, Smile, X } from "lucide-react";
+import { EmojiPicker } from "@multica/ui/components/common/emoji-picker";
 import { ProviderLogo } from "../../runtimes/components/provider-logo";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { ModelDropdown } from "./model-dropdown";
@@ -70,6 +71,8 @@ export function CreateAgentDialog({
     template ? `${template.name}${t(($) => $.create_dialog.duplicate_copy_suffix)}` : "",
   );
   const [description, setDescription] = useState(template?.description ?? "");
+  const [icon, setIcon] = useState<string | null>(template?.icon ?? null);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [visibility, setVisibility] = useState<AgentVisibility>(
     template?.visibility ?? "private",
   );
@@ -125,6 +128,7 @@ export function CreateAgentDialog({
         runtime_id: selectedRuntime.id,
         visibility,
         model: model.trim() || undefined,
+        icon: icon ?? undefined,
       };
       if (template) {
         if (template.instructions) data.instructions = template.instructions;
@@ -185,6 +189,42 @@ export function CreateAgentDialog({
                 if (e.key === "Enter") handleSubmit();
               }}
             />
+          </div>
+
+          {/* Optional emoji icon */}
+          <div>
+            <Label className="text-xs text-muted-foreground">Icon (optional)</Label>
+            <div className="mt-1 flex items-center gap-2">
+              <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-8 items-center gap-1.5 rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {icon ? (
+                      <span className="text-base leading-none">{icon}</span>
+                    ) : (
+                      <Smile className="h-4 w-4" />
+                    )}
+                    <span>{icon ? "Change emoji" : "Pick emoji"}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0">
+                  <EmojiPicker onSelect={(emoji) => { setIcon(emoji); setEmojiPickerOpen(false); }} />
+                </PopoverContent>
+              </Popover>
+              {icon && (
+                <button
+                  type="button"
+                  onClick={() => setIcon(null)}
+                  className="flex h-8 items-center gap-1 rounded-md border bg-muted/50 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Clear emoji"
+                >
+                  <X className="h-3 w-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div>

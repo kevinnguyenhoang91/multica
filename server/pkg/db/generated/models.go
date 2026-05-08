@@ -24,6 +24,7 @@ type Agent struct {
 	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
 	Name               string             `json:"name"`
 	AvatarUrl          pgtype.Text        `json:"avatar_url"`
+	Icon               pgtype.Text        `json:"icon"`
 	RuntimeMode        string             `json:"runtime_mode"`
 	RuntimeConfig      []byte             `json:"runtime_config"`
 	Visibility         string             `json:"visibility"`

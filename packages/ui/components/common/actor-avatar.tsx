@@ -8,6 +8,7 @@ interface ActorAvatarProps {
   name: string;
   initials: string;
   avatarUrl?: string | null;
+  icon?: string | null;
   isAgent?: boolean;
   size?: number;
   className?: string;
@@ -17,6 +18,7 @@ function ActorAvatar({
   name,
   initials,
   avatarUrl,
+  icon,
   isAgent,
   size = 20,
   className,
@@ -46,6 +48,14 @@ function ActorAvatar({
           className="h-full w-full object-cover"
           onError={() => setImgError(true)}
         />
+      ) : icon ? (
+        <span
+          aria-hidden="true"
+          className="inline-flex items-center justify-center leading-none"
+          style={{ fontSize: size * 0.6 }}
+        >
+          {icon}
+        </span>
       ) : isAgent ? (
         <Bot style={{ width: size * 0.55, height: size * 0.55 }} />
       ) : (
