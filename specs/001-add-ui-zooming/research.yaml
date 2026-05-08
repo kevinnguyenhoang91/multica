@@ -1,0 +1,402 @@
+name: "add-ui-zooming"
+summary: >
+  The zoom feature follows the established Zustand persist pattern in packages/core,
+  using defaultStorage + createPersistStorage for a global (non-workspace-scoped) store.
+  A shared useZoom() hook applies document.documentElement.style.zoom so both apps share
+  identical logic. The UI uses the existing segmented-button radiogroup pattern from
+  PreferencesTab (language selector), requiring no new dependencies.
+
+relatedFeatures: []
+
+technologies:
+  - "TypeScript strict mode"
+  - "Zustand (persist middleware + createJSONStorage)"
+  - "React (useEffect)"
+  - "CSS zoom property on document.documentElement"
+  - "StorageAdapter / createPersistStorage (packages/core/platform)"
+  - "defaultStorage (SSR-safe localStorage wrapper)"
+  - "i18next / useT (packages/views/i18n)"
+  - "Tailwind CSS (semantic tokens)"
+  - "Vitest + @testing-library/react"
+
+relatedLinks:
+  - title: "MDN: zoom CSS property"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/zoom"
+  - title: "Electron webContents.setZoomFactor (not used — renderer-only approach chosen)"
+    url: "https://www.electronjs.org/docs/latest/api/web-contents#contentssetZoomFactorfactor"
+  - title: "Zustand persist middleware docs"
+    url: "https://docs.pmnd.rs/zustand/integrations/persisting-store-data"
+
+decisions:
+  - title: "Zoom Store — Global vs. Workspace-Scoped Persistence"
+    chosen: |
+      Global persist store in packages/core/zoom-store.ts using
+      createJSONStorage(() => createPersistStorage(defaultStorage)).
+      Storage key: "multica_zoom_level". No workspace rehydration registration.
+    rejected:
+      - |
+        Workspace-aware storage (createWorkspaceAwareStorage) — rejected because zoom is a
+        per-device display preference, not per-workspace data. Using workspace-scoped storage
+        would reset zoom on workspace switch, which is wrong.
+      - |
+        next-themes / ThemeProvider extension — rejected because zoom is independent of color
+        theme. Coupling them would violate single-responsibility and make the store harder to test.
+    rationale: |
+      The draft-store.ts uses createWorkspaceAwareStorage only because drafts are workspace-specific.
+      Zoom is a device-level preference (like language via defaultStorage in i18n). The correct
+      analogue is defaultStorage with createPersistStorage — the same pattern used by the SSR-safe
+      localStorage wrapper in packages/core/platform/storage.ts. No registerForWorkspaceRehydration
+      call is needed.
+
+  - title: "Zoom Level Type — Union Literal vs. Number"
+    chosen: |
+      TypeScript union literal type: type ZoomLevel = 0.8 | 0.9 | 1 | 1.1 | 1.25.
+      Stored as a numeric value (not percentage string) so it can be assigned directly
+      to document.documentElement.style.zoom without conversion.
+    rejected:
+      - |
+        Plain number type — rejected because it allows any numeric value (e.g. 0.37, 99),
+        defeating compile-time safety. NFR-5 explicitly requires a union literal.
+      - |
+        String union ("80%" | "90%" | ...) — rejected because CSS zoom accepts both numeric
+        factors and percentage strings, but using strings requires a string-to-number parse
+        step in the hook and complicates the store comparisons. Numeric factors are cleaner.
+    rationale: |
+      NFR-5 mandates a union literal to prevent invalid values at compile time. Numeric factors
+      (0.8, 0.9, 1, 1.1, 1.25) map directly to CSS zoom values and avoid any conversion layer.
+      A const ZOOM_LEVELS array of ZoomLevel satisfies NFR-6 (single place to add a new level).
+
+  - title: "CSS Zoom Application Point"
+    chosen: |
+      document.documentElement.style.zoom set directly in a useEffect inside the shared
+      useZoom() hook. Applied synchronously on mount and on every store value change.
+    rejected:
+      - |
+        transform: scale() on a wrapper div — rejected because scale() does not participate
+        in CSS layout. The element retains its original box dimensions, causing overflow bugs
+        with fixed headers, sticky sidebars, and modals. Avoid entirely.
+      - |
+        Electron webContents.setZoomFactor IPC — rejected because it requires main-process
+        changes and IPC round-trips. The feature spec explicitly prohibits IPC changes (NFR-2).
+        CSS zoom in the renderer achieves identical results with zero IPC.
+      - |
+        CSS custom property --zoom on :root with Tailwind arbitrary value — rejected because
+        Tailwind cannot dynamically generate zoom utilities at runtime without JIT arbitrary
+        values that change per render. It adds indirection without benefit; the DOM write must
+        happen anyway.
+    rationale: |
+      document.documentElement.style.zoom is the approach used by VS Code and Linear. It scales
+      the entire viewport including fixed/sticky positioned elements because CSS zoom participates
+      in layout (unlike transform). It works identically in Chromium (Electron renderer) and all
+      modern browsers. No IPC, no main-process changes.
+
+  - title: "Shared useZoom() Hook Location"
+    chosen: |
+      packages/core/use-zoom.ts exports useZoom(). The hook reads useZoomStore and applies
+      document.documentElement.style.zoom in a useEffect. Called once from AppContent in
+      apps/desktop/src/renderer/src/App.tsx and once from WebProviders (client component)
+      in apps/web/components/web-providers.tsx.
+    rejected:
+      - |
+        Inline useEffect in each app root independently — rejected by CLAUDE.md's No-Duplication
+        Rule: "If the same logic exists in both apps, it must be extracted to a shared package."
+        Two copies will diverge (e.g. one app gets a new zoom level, the other doesn't).
+      - |
+        packages/views/use-zoom.ts — rejected because packages/views is for UI components and
+        pages, not headless platform hooks. The hook has zero react-dom or UI dependency; it
+        belongs in packages/core per the package boundary rules in CLAUDE.md.
+    rationale: |
+      CLAUDE.md is explicit: shared headless logic (stores, hooks, side effects) lives in
+      packages/core. The zoom hook has no framework-specific dependency — it just reads a Zustand
+      store and writes to the DOM. packages/core is the canonical home for exactly this kind of
+      cross-platform side effect.
+
+  - title: "UI Control — Segmented Button Group vs. Slider"
+    chosen: |
+      Segmented button group: a row of discrete buttons (80%, 90%, 100% (Default), 110%, 125%)
+      using role="radiogroup" + role="radio" aria-checked, matching the existing language selector
+      pattern in PreferencesTab (packages/views/settings/components/preferences-tab.tsx:208-228).
+    rejected:
+      - |
+        Slider (range input) — the open question answer field says "Slider" but the functional
+        requirement FR-8 explicitly mandates "a segmented button group (matching the existing
+        theme selector pattern)". The selectionRationale in the spec also describes the segmented
+        group approach. The slider option is contradicted by the written FR and the existing UI
+        pattern; segmented buttons are chosen to align with FR-8 and codebase consistency.
+      - |
+        Numeric input / select dropdown — adds a submission step (Enter or blur) and is visually
+        inconsistent with the discrete theme/language controls already in PreferencesTab. Segmented
+        buttons communicate all available values immediately.
+    rationale: |
+      FR-8 says "segmented button group matching the existing theme selector pattern." The language
+      selector in PreferencesTab already uses role="radiogroup" discrete buttons with the same
+      active/inactive Tailwind styling (border-brand bg-brand/10 vs border-border). Reusing this
+      exact pattern requires zero new shadcn components or npm packages, satisfying NFR-4.
+
+  - title: "Web App Integration Point for useZoom()"
+    chosen: |
+      Call useZoom() inside the WebProviders client component
+      (apps/web/components/web-providers.tsx). WebProviders is already a "use client" wrapper
+      that mounts CoreProvider and other client-side providers; it is the natural home for a
+      client-side DOM side effect.
+    rejected: |
+      - |
+        apps/web/app/layout.tsx (RootLayout) — rejected because layout.tsx is an async React
+        Server Component (no "use client" directive). Hooks cannot be called in server components.
+        Any useEffect-based hook requires a client boundary.
+      - |
+        A new dedicated ZoomProvider wrapper component — rejected as unnecessary indirection.
+        WebProviders already exists and is the right client boundary; adding another wrapper
+        creates file bloat for no benefit.
+    rationale: |
+      Next.js App Router server components cannot call hooks. WebProviders is the existing
+      client boundary that wraps all app content. Adding useZoom() there follows the same
+      pattern as any other client-side initialization in the web app.
+
+  - title: "i18n Key Structure for Zoom Section"
+    chosen: |
+      Add under preferences.zoom in both en/settings.json and zh-Hans/settings.json:
+        title: "Zoom"
+        level_80: "80%"
+        level_90: "90%"
+        level_100: "100% (Default)"
+        level_110: "110%"
+        level_125: "125%"
+    rejected:
+      - |
+        Single interpolated key (e.g. "zoom_level": "{{value}}%") — rejected because the
+        100% level needs the "(Default)" suffix, which cannot be expressed by a simple numeric
+        interpolation without conditional logic in the component. Discrete keys are simpler.
+      - |
+        Storing zoom labels as an array in the store — rejected because the store should contain
+        only numeric state (ZoomLevel values), not display strings. i18n keys belong in the
+        locale files, consumed by the UI component via useT().
+    rationale: |
+      Discrete keys mirror the existing pattern used for themeOptions and languageOptions in
+      PreferencesTab, where each option has its own translation key. The "(Default)" annotation
+      on 100% requires a distinct key anyway. Following this pattern keeps the component code
+      consistent and avoids conditional string-building in JSX.
+
+openQuestions:
+  - question: "Where exactly should useZoom() be called in the web app given RootLayout is a server component?"
+    resolved: true
+    options:
+      - option: "Inside WebProviders client component (apps/web/components/web-providers.tsx)"
+        description: |
+          WebProviders is already a 'use client' component that wraps CoreProvider and other
+          providers. Adding useZoom() there requires no new files and follows the existing
+          client-boundary pattern. Minimal change, zero new abstractions.
+        selected: true
+      - option: "New dedicated ZoomProvider wrapper"
+        description: |
+          Create a separate ZoomProvider.tsx in apps/web/components/ that calls useZoom() and
+          wraps children. More explicit but adds a file for a 3-line component. Unnecessary
+          given WebProviders already serves as the client boundary.
+        selected: false
+      - option: "Inside a shared layout client component in packages/views/"
+        description: |
+          Add a DashboardZoomEffect client component in packages/views/layout/ that calls
+          useZoom() and is mounted inside the dashboard shell. This would limit zoom application
+          to authenticated dashboard routes, missing the zoom effect on auth pages.
+        selected: false
+    selectionRationale: |
+      WebProviders is the correct and minimal integration point for the web app. It is already
+      a client component that manages app-wide initialization. Adding useZoom() there is
+      equivalent to how the desktop app adds it to AppContent — one call at the root client
+      boundary, zero new abstractions.
+
+  - question: "Should the zoom store export a named hook or use a selector pattern matching existing stores?"
+    resolved: true
+    options:
+      - option: "Named export useZoomStore following the pattern of existing stores (e.g. useIssueDraftStore)"
+        description: |
+          Export the Zustand store as useZoomStore from zoom-store.ts. The useZoom() hook in
+          use-zoom.ts imports useZoomStore and subscribes to zoomLevel via selector. Consistent
+          with every other store in packages/core (useAuthStore, useIssueDraftStore, etc.).
+        selected: true
+      - option: "Bundle store + hook into a single file zoom.ts"
+        description: |
+          Put both the Zustand create() call and the useZoom() hook in one file. Saves one file
+          but mixes store definition with DOM side-effect logic. Harder to test store in isolation.
+        selected: false
+      - option: "Use React Context instead of Zustand for zoom state"
+        description: |
+          A ZoomContext with useState + localStorage read on init. Avoids Zustand but loses
+          automatic persistence, rehydration, and the established store pattern. Inconsistent
+          with how all other client preferences are managed in this codebase.
+        selected: false
+    selectionRationale: |
+      Every client preference store in packages/core follows the Zustand + persist pattern with
+      a named useXxxStore export. Using useZoomStore is the path of least surprise and keeps
+      the zoom store testable in isolation (store logic vs. DOM side-effect hook). Bundling both
+      into one file would obscure the separation and make unit testing the store harder.
+
+  - question: "Which files need to export useZoomStore / useZoom for consumers?"
+    resolved: true
+    options:
+      - option: "Export from packages/core/index.ts (the package's public barrel)"
+        description: |
+          Add useZoomStore and ZoomLevel to packages/core/index.ts. Both apps and packages/views
+          import from '@multica/core', so they get access via the established barrel export path.
+          Consistent with how useAuthStore, useIssueDraftStore, etc. are exported.
+        selected: true
+      - option: "Direct deep import (e.g. import from '@multica/core/zoom-store')"
+        description: |
+          Skip the barrel and use deep imports. Works because the Internal Packages pattern means
+          no pre-compilation, but it bypasses the established public API surface and makes refactoring
+          the file location harder later.
+        selected: false
+      - option: "Export only from a new packages/core/zoom/index.ts sub-barrel"
+        description: |
+          Group zoom files into packages/core/zoom/ and export from a sub-barrel. Adds structure
+          for a feature with only two files — overkill. Other small features (platform/, config/)
+          don't have sub-barrels unless they have many files.
+        selected: false
+    selectionRationale: |
+      The packages/core/index.ts barrel is the public API surface for the package. All other
+      stores (useAuthStore, useIssueDraftStore) are exported there. Adding useZoomStore and
+      ZoomLevel to index.ts follows this established convention and is the expected import path
+      for consumers in packages/views and the app roots.
+
+content: |
+  ## Status
+
+  - **Phase:** Research (complete)
+  - **Updated:** 2026-05-08
+
+  ## Architecture Overview
+
+  The zoom feature is a thin layer on top of three established codebase patterns:
+  1. **Zustand persist store** (`packages/core/platform/persist-storage.ts` + `defaultStorage`) for preference storage
+  2. **Shared hook in packages/core** for cross-platform DOM side effects
+  3. **Segmented radiogroup buttons** in `PreferencesTab` for the UI control
+
+  No new npm packages are required. All building blocks exist.
+
+  ## Technology Decisions
+
+  ### 1. Zoom Store — Global Persist, Non-Workspace-Scoped
+
+  **Chosen:** `packages/core/zoom-store.ts` using `createJSONStorage(() => createPersistStorage(defaultStorage))`
+
+  **Rejected:**
+  - `createWorkspaceAwareStorage` — zoom is a device display preference, not workspace data
+  - next-themes extension — unrelated concern; coupling violates single responsibility
+
+  **Rationale:** `defaultStorage` is the SSR-safe localStorage wrapper used for all global
+  (non-workspace) preferences. The store exports `useZoomStore` with `zoomLevel: ZoomLevel`
+  state and a `setZoomLevel(level: ZoomLevel)` action. Storage key: `"multica_zoom_level"`.
+
+  ### 2. Type Safety — Union Literal
+
+  **Chosen:** `type ZoomLevel = 0.8 | 0.9 | 1 | 1.1 | 1.25`
+
+  A `const ZOOM_LEVELS: ZoomLevel[]` array acts as the single source of truth for all
+  available levels (NFR-6). Adding a new level requires changing only this array and the
+  i18n strings.
+
+  ### 3. CSS Application — document.documentElement.style.zoom
+
+  **Chosen:** Direct DOM write in `useEffect` inside `useZoom()` hook
+
+  **Rejected:**
+  - `transform: scale()` — does not participate in layout; breaks fixed/sticky elements
+  - Electron IPC / `webContents.setZoomFactor` — requires main-process changes; prohibited by NFR-2
+  - CSS custom property with Tailwind — indirection without benefit; DOM write required anyway
+
+  **Rationale:** `document.documentElement.style.zoom` scales the entire viewport uniformly,
+  including fixed headers, sticky sidebars, and modals. Supported in all modern browsers and
+  Electron's Chromium. Used by VS Code and Linear.
+
+  ### 4. Shared useZoom() Hook
+
+  **Chosen:** `packages/core/use-zoom.ts`
+
+  ```typescript
+  export function useZoom(): void {
+    const zoomLevel = useZoomStore((s) => s.zoomLevel);
+    useEffect(() => {
+      document.documentElement.style.zoom = String(zoomLevel);
+    }, [zoomLevel]);
+  }
+  ```
+
+  Called once from `AppContent` (desktop) and once from `WebProviders` (web). The web
+  `layout.tsx` is a server component and cannot call hooks directly; `WebProviders` is the
+  existing `"use client"` boundary.
+
+  ### 5. UI Control — Segmented Button Group
+
+  **Chosen:** Discrete buttons with `role="radiogroup"` matching the language selector in
+  `PreferencesTab` (lines 208–228). No new shadcn components needed.
+
+  **Rejected:**
+  - Slider — contradicted by FR-8 ("segmented button group matching the existing theme selector
+    pattern") despite the spec's open-question `answer` field; FR takes precedence
+  - Numeric input/select — adds a submission step; inconsistent with existing discrete controls
+
+  **Rationale:** The language selector already demonstrates the exact pattern: a `div` with
+  `role="radiogroup"`, each option a `<button role="radio" aria-checked={active}>` styled with
+  `border-brand bg-brand/10` when active. Zero new code patterns needed.
+
+  ## Library Analysis
+
+  | Library | Purpose | Decision | Reasoning |
+  | ------- | ------- | -------- | --------- |
+  | zustand/middleware (persist) | Persist zoom to localStorage | Use (already installed) | Established pattern for all client stores |
+  | defaultStorage | SSR-safe localStorage wrapper | Use (already in packages/core) | Non-workspace preference, identical to other global prefs |
+  | CSS zoom property | Scale entire UI viewport | Use (browser-native) | Participates in layout; no IPC; Chromium + all modern browsers |
+  | Electron webContents.setZoomFactor | Alternative renderer zoom | Reject | Requires IPC and main-process changes; CSS zoom achieves same result in renderer |
+  | transform: scale() | Alternative scaling approach | Reject | Does not participate in layout; breaks fixed/sticky elements |
+  | React Context | Alternative to Zustand for zoom | Reject | Loses automatic persistence and rehydration; inconsistent with codebase |
+
+  ## File Impact Summary
+
+  | File | Change | Notes |
+  | ---- | ------ | ----- |
+  | `packages/core/zoom-store.ts` (new) | Create | Zustand persist store, ZoomLevel type, ZOOM_LEVELS constant |
+  | `packages/core/use-zoom.ts` (new) | Create | Shared hook applying CSS zoom via useEffect |
+  | `packages/core/index.ts` | Update | Export useZoomStore, ZoomLevel, useZoom |
+  | `packages/views/settings/components/preferences-tab.tsx` | Update | Add Zoom section below Language section |
+  | `packages/views/locales/en/settings.json` | Update | Add preferences.zoom.* keys |
+  | `packages/views/locales/zh-Hans/settings.json` | Update | Add preferences.zoom.* keys (Chinese) |
+  | `apps/web/components/web-providers.tsx` | Update | Call useZoom() at client boundary |
+  | `apps/desktop/src/renderer/src/App.tsx` | Update | Call useZoom() in AppContent |
+  | `packages/core/zoom-store.test.ts` (new) | Create | Unit tests: initial state, transitions, persist round-trip |
+  | `packages/views/settings/components/preferences-tab.test.tsx` (new) | Create | Unit tests: rendering, active state, click handler |
+
+  ## Security Considerations
+
+  - **No server data involved.** Zoom is a purely local DOM preference persisted in localStorage.
+    There is no API call, no cross-origin data, and no user-identifying information stored.
+  - **No XSS vector.** The zoom value is a union literal numeric type; it is assigned directly
+    as `String(zoomLevel)` (e.g. `"0.8"`, `"1"`) to `element.style.zoom`. There is no
+    innerHTML or dynamic script evaluation. Invalid values are impossible at compile time.
+  - **localStorage** holds only a JSON-serialized numeric value under a namespaced key.
+    Standard Zustand persist behavior; no sensitive data.
+
+  ## Performance Implications
+
+  - **Synchronous within paint frame.** The `useEffect` fires synchronously after DOM mutation,
+    before the browser paints. CSS zoom is a layout-participating property; the browser batches
+    the reflow with the current frame. No async delay visible to the user (NFR-1).
+  - **Single selector subscription.** `useZoomStore((s) => s.zoomLevel)` subscribes to a
+    primitive. Zustand only re-renders the subscribing component when `zoomLevel` changes.
+    No performance concern from frequent re-renders.
+  - **No polling or interval.** The preference is read once on mount (via Zustand rehydration)
+    and updated only on explicit user action. Zero background work.
+
+  ## Architecture Notes
+
+  The zoom feature is intentionally minimal. It follows every established pattern in the
+  codebase without introducing new abstractions:
+
+  - **Store pattern:** identical to `useIssueDraftStore` but without workspace scope
+  - **Hook pattern:** identical to how `useDaemonIPCBridge` encapsulates a side effect
+  - **UI pattern:** identical to the language selector radiogroup in `PreferencesTab`
+  - **i18n pattern:** discrete keys per option, mirroring `themeOptions` / `languageOptions`
+
+  The only noteworthy decision is the web integration point: `layout.tsx` is a server component,
+  so `useZoom()` must be called inside `WebProviders` (the existing `"use client"` boundary)
+  rather than in the layout itself. This is the correct Next.js App Router pattern for
+  client-side DOM initialization.
