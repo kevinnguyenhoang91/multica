@@ -110,7 +110,7 @@ export interface Agent {
   description: string;
   instructions: string;
   avatar_url: string | null;
-  icon: string | null;
+  icon?: string | null;
   runtime_mode: AgentRuntimeMode;
   runtime_config: Record<string, unknown>;
   custom_env: Record<string, string>;
