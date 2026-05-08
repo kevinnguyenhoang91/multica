@@ -5,8 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+// runtimeGOOS is the host-platform string used by buildMetaSkillContent to
+// emit Windows-specific guidance. Defaults to runtime.GOOS; tests override
+// it to exercise the cross-platform branches deterministically without
+// having to run on every target OS.
+var runtimeGOOS = runtime.GOOS
 
 // formatProjectResource renders a single resource as a human-readable bullet.
 // Unknown resource types fall back to a JSON-encoded ref so the agent can
@@ -144,6 +151,18 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("    ```\n")
 	b.WriteString("\n")
 	b.WriteString("  - The same rule applies to `--description` on `multica issue create` and `multica issue update` — use `--description-stdin` and pipe a HEREDOC for any multi-line description; the inline `--description \"...\"` form is for short single-line text only.\n")
+	if runtimeGOOS == "windows" {
+		b.WriteString("  - **Windows shell encoding caveat — read this when your content contains non-ASCII characters (Chinese, Japanese, accents, emoji, etc.).** Windows PowerShell 5.1 (the default on Win11) and `cmd.exe` re-encode piped bytes through the console codepage before they reach `multica`. Characters the active codepage cannot represent are silently replaced with `?`, so `中文` arrives as `??`. To avoid the loss, write the body to a UTF-8 file with your file-write tool and pass `--content-file <path>` (or `--description-file <path>`) instead of piping. The file flag reads bytes directly off disk and skips the shell entirely:\n")
+		b.WriteString("\n")
+		b.WriteString("    ```\n")
+		b.WriteString("    # 1. Write the comment body to a UTF-8 file using your write_file / Write tool.\n")
+		b.WriteString("    # 2. Then run:\n")
+		b.WriteString("    multica issue comment add <issue-id> --content-file ./comment.md\n")
+		b.WriteString("    multica issue create --title \"...\" --description-file ./desc.md\n")
+		b.WriteString("    ```\n")
+		b.WriteString("\n")
+		b.WriteString("    The `--content-file` / `--description-file` flags accept any UTF-8 file path; the file may live anywhere your tool can write to. Prefer them over stdin on Windows whenever the body contains non-ASCII text.\n")
+	}
 	b.WriteString("- `multica issue comment delete <comment-id>` — Delete a comment\n")
 	b.WriteString("- `multica label create --name \"...\" --color \"#hex\"` — Define a new workspace label (use this only when the label you need does not exist yet; reuse existing labels via `multica label list` first)\n")
 	b.WriteString("- `multica autopilot create --title \"...\" --agent <name> --mode create_issue [--description \"...\"]` — Create an autopilot\n")

@@ -1015,6 +1015,57 @@ func TestInjectRuntimeConfigDirectsMultiLineWritesToStdin(t *testing.T) {
 	}
 }
 
+// TestInjectRuntimeConfigWindowsRecommendsContentFile pins the Windows-specific
+// fallback added after issues #2198 / #2236, where Chinese characters in
+// agent-authored comments arrived as `?` because Windows PowerShell 5.1 and
+// cmd.exe re-encode piped HEREDOC bytes through the active console codepage,
+// dropping non-ASCII characters before they reach `multica`. The instructions
+// must point agents at `--content-file` / `--description-file` whenever the
+// daemon is hosted on Windows.
+func TestInjectRuntimeConfigWindowsRecommendsContentFile(t *testing.T) {
+	saved := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = saved })
+
+	t.Run("windows host emits the file-based fallback", func(t *testing.T) {
+		runtimeGOOS = "windows"
+		dir := t.TempDir()
+		if err := InjectRuntimeConfig(dir, "codex", TaskContextForEnv{IssueID: "issue-1"}); err != nil {
+			t.Fatalf("InjectRuntimeConfig failed: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+		if err != nil {
+			t.Fatalf("read AGENTS.md: %v", err)
+		}
+		s := string(data)
+		for _, want := range []string{
+			"Windows shell encoding caveat",
+			"console codepage",
+			"--content-file",
+			"--description-file",
+			"silently replaced with `?`",
+		} {
+			if !strings.Contains(s, want) {
+				t.Errorf("AGENTS.md missing Windows fallback guidance %q\n---\n%s", want, s)
+			}
+		}
+	})
+
+	t.Run("non-windows host omits the file-based fallback", func(t *testing.T) {
+		runtimeGOOS = "linux"
+		dir := t.TempDir()
+		if err := InjectRuntimeConfig(dir, "codex", TaskContextForEnv{IssueID: "issue-1"}); err != nil {
+			t.Fatalf("InjectRuntimeConfig failed: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+		if err != nil {
+			t.Fatalf("read AGENTS.md: %v", err)
+		}
+		if strings.Contains(string(data), "Windows shell encoding caveat") {
+			t.Errorf("AGENTS.md should not surface Windows guidance when host is %s", runtimeGOOS)
+		}
+	})
+}
+
 func TestInjectRuntimeConfigCodexEmphasizesStdinForFormattedComments(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
