@@ -172,9 +172,15 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 
 	if provider == "codex" {
 		b.WriteString("## Codex-Specific Comment Formatting\n\n")
-		b.WriteString("Codex often follows the per-turn reply command literally. For issue comments, always use `--content-stdin` with a HEREDOC, even for short single-line replies. ")
-		b.WriteString("Never use inline `--content` for agent-authored comments. Keep the same `--parent` value from the trigger comment when replying. ")
-		b.WriteString("Do not compress a multi-paragraph answer into one line and do not rely on `\\n` escapes.\n\n")
+		if runtimeGOOS == "windows" {
+			b.WriteString("Codex often follows the per-turn reply command literally. On Windows, **always write the comment body to a UTF-8 file with your file-write tool first, then post it with `--content-file <path>`** — do NOT pipe via `--content-stdin`. PowerShell 5.1 / cmd.exe re-encode piped bytes through the active console codepage and silently drop non-ASCII characters as `?`. Never use inline `--content` for agent-authored comments. ")
+			b.WriteString("Keep the same `--parent` value from the trigger comment when replying. ")
+			b.WriteString("Do not compress a multi-paragraph answer into one line and do not rely on `\\n` escapes.\n\n")
+		} else {
+			b.WriteString("Codex often follows the per-turn reply command literally. For issue comments, always use `--content-stdin` with a HEREDOC, even for short single-line replies. ")
+			b.WriteString("Never use inline `--content` for agent-authored comments. Keep the same `--parent` value from the trigger comment when replying. ")
+			b.WriteString("Do not compress a multi-paragraph answer into one line and do not rely on `\\n` escapes.\n\n")
+		}
 	}
 
 	// Inject available repositories section.
