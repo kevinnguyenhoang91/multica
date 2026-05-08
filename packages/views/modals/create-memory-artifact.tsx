@@ -17,14 +17,20 @@ import { useT } from "../i18n";
 // Smaller-surface modal than CreateProjectModal — memory artifacts only
 // require kind + title + content. Tags / anchor / parent_id are deferred
 // to the detail page edit flow; this modal is the minimum viable create.
-export function CreateMemoryArtifactModal({ onClose }: { onClose: () => void }) {
+interface CreateMemoryArtifactModalProps {
+  onClose: () => void;
+  data?: Record<string, unknown> | null;
+}
+
+export function CreateMemoryArtifactModal({ onClose, data }: CreateMemoryArtifactModalProps) {
   const router = useNavigation();
   const workspace = useCurrentWorkspace();
   const wsPaths = useWorkspacePaths();
   const createArtifact = useCreateMemoryArtifact();
   const { t } = useT("memory");
 
-  const [kind, setKind] = useState<MemoryArtifactKind>("wiki_page");
+  const initialKind = (data?.kind as MemoryArtifactKind | undefined) ?? "wiki_page";
+  const [kind, setKind] = useState<MemoryArtifactKind>(initialKind);
   const [title, setTitle] = useState("");
   const contentRef = useRef<ContentEditorRef>(null);
   const [submitting, setSubmitting] = useState(false);

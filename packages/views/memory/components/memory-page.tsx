@@ -133,7 +133,9 @@ export function MemoryPage() {
   const isLoading = isSearching ? searchQuery.isLoading : listQuery.isLoading;
 
   const openCreate = () =>
-    useModalStore.getState().open("create-memory-artifact");
+    useModalStore.getState().open("create-memory-artifact", {
+      kind: kindFilter === "all" ? null : kindFilter,
+    });
 
   return (
     <div className="flex h-full flex-col">

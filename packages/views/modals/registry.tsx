@@ -28,7 +28,7 @@ export function ModalRegistry() {
     case "create-project":
       return <CreateProjectModal onClose={close} />;
     case "create-memory-artifact":
-      return <CreateMemoryArtifactModal onClose={close} />;
+      return <CreateMemoryArtifactModal onClose={close} data={data} />;
     case "feedback":
       return <FeedbackModal onClose={close} />;
     case "issue-set-parent":
