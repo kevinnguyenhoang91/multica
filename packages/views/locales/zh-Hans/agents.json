@@ -362,5 +362,13 @@
     "runtime_offline": "守护进程离线",
     "runtime_recovery": "守护进程已重启",
     "manual": "用户取消"
+  },
+  "icon": {
+    "label": "图标（可选）",
+    "pick": "选择表情",
+    "change": "更换表情",
+    "clear": "清除",
+    "set_emoji_icon": "设置表情图标",
+    "emoji": "表情"
   }
 }

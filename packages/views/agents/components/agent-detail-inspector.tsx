@@ -324,14 +324,14 @@ function AvatarEditor({
           <button
             type="button"
             className="flex h-7 items-center gap-1 rounded-md border bg-muted/50 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Set emoji icon"
+            aria-label={t($ => $.icon.set_emoji_icon)}
           >
             {agent.icon ? (
               <span className="text-base leading-none">{agent.icon}</span>
             ) : (
               <Smile className="h-3.5 w-3.5" />
             )}
-            <span>{agent.icon ? "Change" : "Emoji"}</span>
+            <span>{agent.icon ? t($ => $.icon.change) : t($ => $.icon.emoji)}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
@@ -345,7 +345,7 @@ function AvatarEditor({
           type="button"
           onClick={(e) => void handleClearIcon(e)}
           className="flex h-7 items-center gap-1 rounded-md border bg-muted/50 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Clear emoji icon"
+          aria-label={t($ => $.icon.clear)}
         >
           <X className="h-3 w-3" />
         </button>

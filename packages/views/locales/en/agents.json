@@ -370,5 +370,13 @@
     "runtime_offline": "Daemon offline",
     "runtime_recovery": "Daemon restarted",
     "manual": "Cancelled by user"
+  },
+  "icon": {
+    "label": "Icon (optional)",
+    "pick": "Pick emoji",
+    "change": "Change emoji",
+    "clear": "Clear",
+    "set_emoji_icon": "Set emoji icon",
+    "emoji": "Emoji"
   }
 }

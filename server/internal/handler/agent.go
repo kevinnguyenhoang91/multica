@@ -629,7 +629,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.AvatarURL != nil {
 		params.AvatarUrl = pgtype.Text{String: *req.AvatarURL, Valid: true}
 	}
-	if req.Icon != nil {
+	rawIcon, hasIcon := rawFields["icon"]
+	shouldClearIcon := hasIcon && bytes.Equal(bytes.TrimSpace(rawIcon), []byte("null"))
+	if hasIcon && !shouldClearIcon && req.Icon != nil {
 		params.Icon = pgtype.Text{String: *req.Icon, Valid: true}
 	}
 	if req.RuntimeConfig != nil {
@@ -692,6 +694,16 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Warn("clear agent mcp_config failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to clear mcp_config: "+err.Error())
+			return
+		}
+	}
+
+	// icon: null in the request means explicitly clear the field.
+	if shouldClearIcon {
+		agent, err = h.Queries.ClearAgentIcon(r.Context(), agent.ID)
+		if err != nil {
+			slog.Warn("clear agent icon failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+			writeError(w, http.StatusInternalServerError, "failed to clear icon: "+err.Error())
 			return
 		}
 	}
