@@ -1,0 +1,122 @@
+# Feature Specification (YAML)
+# This is the source of truth. Markdown is auto-generated from this file.
+
+name: "add-ui-zooming"
+number: 1
+branch: "feat/001-add-ui-zooming"
+oneLiner: "Add UI zoom level preference to the Preferences settings tab"
+summary: >
+  Add a UI zoom level control to the Preferences settings tab, allowing users to scale
+  the entire application interface up or down (e.g. 80%, 90%, 100%, 110%, 125%).
+  The zoom preference is persisted locally via the existing StorageAdapter/Zustand
+  pattern and applied as a CSS zoom on the root element, working identically on both
+  the web app and the Electron desktop app.
+phase: "Analysis"
+sizeEstimate: "S"
+
+relatedFeatures: []
+
+technologies:
+  - "TypeScript"
+  - "React"
+  - "Zustand (persist middleware)"
+  - "CSS zoom / CSS custom properties"
+  - "Tailwind CSS"
+  - "next-themes (existing preference persistence pattern)"
+  - "Electron (desktop renderer)"
+  - "Vitest"
+
+relatedLinks:
+  - title: "MDN: zoom CSS property"
+    url: "https://developer.mozilla.org/en-US/docs/Web/CSS/zoom"
+  - title: "Electron webContents.setZoomFactor"
+    url: "https://www.electronjs.org/docs/latest/api/web-contents#contentssetZoomFactorfactor"
+
+openQuestions: []
+
+content: |
+  ## Problem Statement
+
+  The application has no way to adjust the UI scale. Users with high-DPI screens,
+  accessibility needs, or personal preference have no in-app mechanism to make the
+  interface larger or smaller. Browsers provide native zoom (Ctrl+/-) but the Electron
+  desktop app suppresses page reload shortcuts and has no URL bar, so OS-level zoom
+  controls are not intuitive. A first-class zoom preference in Settings brings parity
+  with tools like Linear, Notion, and VS Code.
+
+  ## Codebase Analysis
+
+  ### Project Structure
+
+  Key directories for this feature:
+
+  - `packages/core/` — headless Zustand stores and shared logic; the zoom preference
+    store belongs here so both apps share state without duplication
+  - `packages/views/settings/components/preferences-tab.tsx` — the shared Preferences
+    tab where theme and language are already managed; zoom UI slots in here
+  - `packages/views/locales/en/settings.json` + `zh-Hans/settings.json` — i18n strings
+    for the preferences section; zoom labels need to be added here
+  - `packages/ui/components/common/theme-provider.tsx` — uses `next-themes` for theme;
+    the zoom effect should live alongside this in the shared app root
+  - `apps/web/` and `apps/desktop/src/renderer/src/` — each app wraps its root with
+    `CoreProvider`; this is where the zoom CSS effect is applied
+  - `packages/core/platform/persist-storage.ts` — Zustand↔StorageAdapter bridge used
+    by all persisted stores; zoom store uses this same pattern
+
+  ### Architecture Patterns
+
+  - **Zustand + persist middleware** is the established pattern for user preferences
+    (see tab-store, i18n locale adapter). A new `zoom-store.ts` in `packages/core/`
+    follows this pattern exactly.
+  - **StorageAdapter DI** (`packages/core/platform/storage.ts`) means the store works
+    in both the web (localStorage) and Electron (same localStorage in renderer) without
+    platform-specific code.
+  - **CSS zoom on `:root`** is the simplest cross-platform application mechanism: a
+    `useEffect` reads the Zustand store and writes `document.documentElement.style.zoom`
+    (or a CSS custom property). No IPC, no Electron main-process changes required.
+  - **Shared `PreferencesTab`** already receives no props today; a new optional hook
+    import from `@multica/core` keeps it self-contained and consistent with how theme
+    and locale are consumed there.
+  - **`ExtraSettingsTab`** injection prop on `SettingsPage` is NOT needed — zoom is a
+    cross-platform preference that belongs directly in `PreferencesTab`, the same as
+    theme and language.
+
+  ### Relevant Technologies
+
+  - **Zustand** (`persist` middleware + `createPersistStorage`) — the zoom store
+  - **CSS `zoom` property** — supported in all modern browsers and Electron's Chromium;
+    simpler than `transform: scale()` because it participates in layout
+  - **`next-themes`** — pattern reference for how the theme preference is stored and
+    applied; zoom follows the same read-on-mount, write-to-DOM shape
+  - **Tailwind CSS** + shadcn design tokens — the zoom UI (a segmented button group or
+    slider) uses existing component primitives
+  - **Vitest / `@testing-library/react`** — unit tests for the store and the UI live in
+    `packages/core/` and `packages/views/` respectively
+
+  ## Affected Areas
+
+  | Area | Impact | Reasoning |
+  | ---- | ------ | --------- |
+  | `packages/core/` (new zoom-store.ts) | High | New Zustand persist store for zoom level preference |
+  | `packages/views/settings/components/preferences-tab.tsx` | High | UI controls for zoom selection added alongside theme/language |
+  | `packages/views/locales/en/settings.json` | Medium | New i18n keys for zoom section title and level labels |
+  | `packages/views/locales/zh-Hans/settings.json` | Medium | Chinese translations for new zoom keys |
+  | `apps/web/` root layout | Low | Apply zoom CSS effect on mount (useEffect reading zoom store) |
+  | `apps/desktop/src/renderer/src/App.tsx` | Low | Apply zoom CSS effect on mount (same useEffect) |
+
+  ## Dependencies
+
+  - **No new npm packages required.** Zustand, CSS zoom, and existing shadcn UI
+    components (`packages/ui`) cover the full implementation.
+  - Depends on the existing `StorageAdapter` / `createPersistStorage` pattern already
+    established in `packages/core/platform/`.
+  - Depends on the existing `PreferencesTab` component structure and i18n setup.
+  - The Electron desktop app requires **no main-process changes** — CSS zoom is applied
+    entirely in the renderer.
+
+  ## Size Estimate
+
+  **S** — The pattern is fully established (theme preference is a direct analogue).
+  Implementation touches ~5 files: one new store, one updated UI component, two locale
+  files, and two app root files for the CSS effect. No new dependencies, no IPC, no
+  backend changes. Estimated effort: a few hours including tests.
