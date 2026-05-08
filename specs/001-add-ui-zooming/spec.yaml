@@ -11,7 +11,7 @@ summary: >
   The zoom preference is persisted locally via the existing StorageAdapter/Zustand
   pattern and applied as a CSS zoom on the root element, working identically on both
   the web app and the Electron desktop app.
-phase: "Analysis"
+phase: "Requirements"
 sizeEstimate: "S"
 
 relatedFeatures: []
@@ -25,6 +25,7 @@ technologies:
   - "next-themes (existing preference persistence pattern)"
   - "Electron (desktop renderer)"
   - "Vitest"
+  - "@testing-library/react"
 
 relatedLinks:
   - title: "MDN: zoom CSS property"
@@ -32,7 +33,111 @@ relatedLinks:
   - title: "Electron webContents.setZoomFactor"
     url: "https://www.electronjs.org/docs/latest/api/web-contents#contentssetZoomFactorfactor"
 
-openQuestions: []
+openQuestions:
+  - question: "What UI control should be used for zoom level selection?"
+    resolved: true
+    options:
+      - option: "Segmented button group"
+        description: |
+          A row of discrete buttons (80%, 90%, 100%, 110%, 125%) matching the existing
+          theme selector pattern in PreferencesTab. Instantly communicates all available
+          values, requires no dragging, and is consistent with the surrounding UI.
+          Trade-off: fixed set of values, no fine-grained control.
+        selected: true
+      - option: "Slider"
+        description: |
+          A continuous or stepped slider allowing a wider range and potentially finer
+          granularity. More flexible but harder to land on exact percentages, and
+          inconsistent with the discrete theme/language controls already in PreferencesTab.
+        selected: false
+      - option: "Numeric input / dropdown"
+        description: |
+          A text input or <select> with preset options. Works but is less visually
+          immediate than a segmented group and adds a submission step (Enter or blur).
+        selected: false
+    selectionRationale: |
+      The segmented button group mirrors the existing theme selector (System/Light/Dark)
+      already in PreferencesTab, making the new control feel native to the page.
+      Discrete zoom levels (80/90/100/110/125) cover all practical use cases without
+      the precision risk of a slider.
+    answer: "Segmented button group"
+
+  - question: "Which zoom levels should be offered?"
+    resolved: true
+    options:
+      - option: "Five levels: 80%, 90%, 100%, 110%, 125%"
+        description: |
+          Covers the most common accessibility and density needs. 80% gives extra density
+          for large monitors; 125% gives readability for high-DPI or vision-impaired users.
+          Odd step between 110 and 125 matches conventions used by VS Code and Notion.
+        selected: true
+      - option: "Three levels: 90%, 100%, 110%"
+        description: |
+          Simpler, but excludes users with strong accessibility needs at both extremes.
+          Too limited to be a meaningful feature.
+        selected: false
+      - option: "Seven levels: 75%, 80%, 90%, 100%, 110%, 125%, 150%"
+        description: |
+          More granular, but 75% and 150% push the interface into unusable territory on
+          many screen sizes. Extra options increase decision fatigue without clear benefit.
+        selected: false
+    selectionRationale: |
+      Five levels (80/90/100/110/125) match the zoom increments used by VS Code and
+      Notion, are familiar to users, and cover all practical use cases without the
+      extremes that could make the UI unusable. 100% is the default.
+    answer: "Five levels: 80%, 90%, 100%, 110%, 125%"
+
+  - question: "Where should the CSS zoom effect be applied?"
+    resolved: true
+    options:
+      - option: "document.documentElement.style.zoom (root element)"
+        description: |
+          Applying CSS zoom directly to <html> scales the entire viewport uniformly.
+          Supported in all modern browsers and Electron's Chromium. Participates in
+          layout (unlike transform: scale), so scrollbars, overflow, and fixed-position
+          elements all scale correctly. This is the approach used by VS Code and Linear.
+        selected: true
+      - option: "CSS custom property + Tailwind utility class"
+        description: |
+          Set a --zoom CSS variable and apply it via a Tailwind class on the body or a
+          wrapper div. Adds indirection without practical benefit — the CSS zoom value
+          still needs to be written to the DOM directly; Tailwind can't dynamically
+          generate arbitrary zoom values without JIT arbitrary values.
+        selected: false
+      - option: "transform: scale() on a wrapper div"
+        description: |
+          scale() does not participate in layout — the element retains its original
+          dimensions and overlaps siblings unless compensated with margin hacks. Creates
+          significant layout bugs for fixed/sticky elements and scrollbars. Avoid.
+        selected: false
+    selectionRationale: |
+      Writing document.documentElement.style.zoom is the simplest, most correct approach
+      and requires no IPC or main-process changes in Electron. Layout participation is
+      critical for a UI that uses fixed headers, sidebars, and modals.
+    answer: "document.documentElement.style.zoom (root element)"
+
+  - question: "Should the zoom effect hook live in a shared component or each app independently?"
+    resolved: true
+    options:
+      - option: "Shared useZoom hook in packages/core, called from each app root"
+        description: |
+          A single useZoom() hook in packages/core reads the Zustand store and applies
+          document.documentElement.style.zoom. Each app root (apps/web layout and
+          apps/desktop App.tsx) calls the hook. Logic is written once, both apps stay
+          in sync automatically. Follows the No-Duplication Rule in CLAUDE.md.
+        selected: true
+      - option: "Inline useEffect in each app root independently"
+        description: |
+          Copy the same 5-line useEffect into both app roots. Simple but violates the
+          No-Duplication Rule — two copies will diverge over time (e.g. one app adds
+          a new zoom level, the other doesn't).
+        selected: false
+    selectionRationale: |
+      The codebase explicitly forbids duplicating logic between apps (CLAUDE.md:
+      \"If the same logic exists in both apps, it must be extracted to a shared package.\")
+      A shared hook in packages/core satisfies this and is the established pattern for
+      platform-agnostic side effects.
+    answer: "Shared useZoom hook in packages/core, called from each app root"
 
 content: |
   ## Problem Statement
@@ -44,65 +149,100 @@ content: |
   controls are not intuitive. A first-class zoom preference in Settings brings parity
   with tools like Linear, Notion, and VS Code.
 
-  ## Codebase Analysis
+  ## Success Criteria
 
-  ### Project Structure
+  - [ ] A "Zoom" section appears in the Preferences settings tab below the existing
+        theme and language controls, rendered using the same visual pattern as theme selection.
+  - [ ] Five discrete zoom levels are selectable: 80%, 90%, 100%, 110%, 125%.
+  - [ ] Selecting a zoom level immediately scales the entire UI without requiring a
+        page reload or app restart.
+  - [ ] The selected zoom level persists across page reloads and app restarts via
+        localStorage (same StorageAdapter pattern as other preferences).
+  - [ ] 100% is the default zoom level for new users (no prior preference saved).
+  - [ ] The zoom effect applies identically on both the web app (Next.js) and the
+        Electron desktop app without any main-process or IPC changes.
+  - [ ] English and Chinese (zh-Hans) i18n strings are present for the zoom section
+        title and all zoom level labels.
+  - [ ] Unit tests for the zoom store cover: initial state (100%), setting each level,
+        and persistence round-trip.
+  - [ ] Unit tests for the PreferencesTab zoom UI cover: correct rendering of all five
+        options, correct option highlighted for current zoom, and firing the store action
+        on selection.
+  - [ ] TypeScript strict mode is satisfied — no `any` casts in new code.
+  - [ ] `pnpm typecheck` and `pnpm test` pass with no new failures.
 
-  Key directories for this feature:
+  ## Functional Requirements
 
-  - `packages/core/` — headless Zustand stores and shared logic; the zoom preference
-    store belongs here so both apps share state without duplication
-  - `packages/views/settings/components/preferences-tab.tsx` — the shared Preferences
-    tab where theme and language are already managed; zoom UI slots in here
-  - `packages/views/locales/en/settings.json` + `zh-Hans/settings.json` — i18n strings
-    for the preferences section; zoom labels need to be added here
-  - `packages/ui/components/common/theme-provider.tsx` — uses `next-themes` for theme;
-    the zoom effect should live alongside this in the shared app root
-  - `apps/web/` and `apps/desktop/src/renderer/src/` — each app wraps its root with
-    `CoreProvider`; this is where the zoom CSS effect is applied
-  - `packages/core/platform/persist-storage.ts` — Zustand↔StorageAdapter bridge used
-    by all persisted stores; zoom store uses this same pattern
+  - **FR-1**: The system MUST provide a zoom preference control in
+    `packages/views/settings/components/preferences-tab.tsx` offering five discrete
+    levels: 80%, 90%, 100%, 110%, and 125%.
+  - **FR-2**: The system MUST persist the selected zoom level locally using the
+    existing `StorageAdapter` / `createPersistStorage` Zustand pattern in a new
+    `packages/core/zoom-store.ts`.
+  - **FR-3**: The default zoom level MUST be 100% when no preference has been saved.
+  - **FR-4**: The system MUST apply the selected zoom level as `document.documentElement.style.zoom`
+    immediately upon selection and on every subsequent mount, with no page reload required.
+  - **FR-5**: The zoom application logic MUST be implemented as a shared `useZoom()`
+    hook in `packages/core/` so both `apps/web/` and `apps/desktop/` call the same code.
+  - **FR-6**: English i18n strings MUST be added to
+    `packages/views/locales/en/settings.json` for the zoom section heading and each
+    zoom level label (e.g. "80%", "90%", "100% (Default)", "110%", "125%").
+  - **FR-7**: Chinese (zh-Hans) i18n strings MUST be added to
+    `packages/views/locales/zh-Hans/settings.json` mirroring all keys added in FR-6,
+    following the translation glossary in `apps/docs/content/docs/developers/conventions.zh.mdx`.
+  - **FR-8**: The zoom control UI MUST use a segmented button group (matching the
+    existing theme selector pattern) built from existing shadcn/ui primitives in
+    `packages/ui/` — no new npm packages.
+  - **FR-9**: The zoom store MUST be unit-tested in `packages/core/` covering: initial
+    state, state transition for each zoom level, and persist/rehydrate round-trip.
+  - **FR-10**: The PreferencesTab zoom UI MUST be unit-tested in `packages/views/`
+    covering: rendering all five options, active option highlighting, and invoking
+    the store setter on click.
 
-  ### Architecture Patterns
+  ## Non-Functional Requirements
 
-  - **Zustand + persist middleware** is the established pattern for user preferences
-    (see tab-store, i18n locale adapter). A new `zoom-store.ts` in `packages/core/`
-    follows this pattern exactly.
-  - **StorageAdapter DI** (`packages/core/platform/storage.ts`) means the store works
-    in both the web (localStorage) and Electron (same localStorage in renderer) without
-    platform-specific code.
-  - **CSS zoom on `:root`** is the simplest cross-platform application mechanism: a
-    `useEffect` reads the Zustand store and writes `document.documentElement.style.zoom`
-    (or a CSS custom property). No IPC, no Electron main-process changes required.
-  - **Shared `PreferencesTab`** already receives no props today; a new optional hook
-    import from `@multica/core` keeps it self-contained and consistent with how theme
-    and locale are consumed there.
-  - **`ExtraSettingsTab`** injection prop on `SettingsPage` is NOT needed — zoom is a
-    cross-platform preference that belongs directly in `PreferencesTab`, the same as
-    theme and language.
+  - **NFR-1 — Performance**: Applying zoom MUST complete synchronously within the same
+    paint frame as the user's click (no async delay). The `useEffect` dependency on the
+    store value guarantees this.
+  - **NFR-2 — Cross-platform correctness**: The zoom implementation MUST NOT require
+    Electron IPC, main-process API calls (`webContents.setZoomFactor`), or
+    Next.js-specific APIs. It operates purely in the renderer/browser DOM.
+  - **NFR-3 — Accessibility**: The segmented zoom control MUST be keyboard-navigable
+    and have appropriate ARIA labels so screen readers can announce the current and
+    available zoom levels.
+  - **NFR-4 — Package boundaries**: The zoom store MUST live in `packages/core/` with
+    zero `react-dom` or `localStorage` direct usage (use StorageAdapter). The UI
+    component MUST live in `packages/views/`. No zoom logic in app-level files beyond
+    the single `useZoom()` call.
+  - **NFR-5 — Type safety**: All new TypeScript must satisfy strict mode. The zoom level
+    type MUST be a union literal (e.g. `0.8 | 0.9 | 1 | 1.1 | 1.25`) to prevent
+    invalid values at compile time.
+  - **NFR-6 — Maintainability**: Adding a new zoom level in the future MUST require
+    changing only the store's level constant array and the i18n strings — no scattered
+    magic numbers across files.
+  - **NFR-7 — No regressions**: Existing preferences (theme, language) MUST continue
+    to function correctly after the zoom controls are added to PreferencesTab.
 
-  ### Relevant Technologies
+  ## Product Questions & AI Recommendations
 
-  - **Zustand** (`persist` middleware + `createPersistStorage`) — the zoom store
-  - **CSS `zoom` property** — supported in all modern browsers and Electron's Chromium;
-    simpler than `transform: scale()` because it participates in layout
-  - **`next-themes`** — pattern reference for how the theme preference is stored and
-    applied; zoom follows the same read-on-mount, write-to-DOM shape
-  - **Tailwind CSS** + shadcn design tokens — the zoom UI (a segmented button group or
-    slider) uses existing component primitives
-  - **Vitest / `@testing-library/react`** — unit tests for the store and the UI live in
-    `packages/core/` and `packages/views/` respectively
+  | # | Question | AI Recommendation | Rationale |
+  | - | -------- | ----------------- | --------- |
+  | 1 | UI control type for zoom selection | Segmented button group | Matches existing theme selector; discrete levels are sufficient and immediately scannable |
+  | 2 | Zoom levels offered | 80%, 90%, 100%, 110%, 125% | Matches VS Code / Notion conventions; covers all practical use cases |
+  | 3 | CSS zoom application point | document.documentElement.style.zoom | Scales entire viewport including fixed/sticky elements; no IPC needed |
+  | 4 | Where zoom effect hook lives | Shared useZoom in packages/core | No-Duplication Rule; single source of truth for both apps |
 
   ## Affected Areas
 
   | Area | Impact | Reasoning |
   | ---- | ------ | --------- |
-  | `packages/core/` (new zoom-store.ts) | High | New Zustand persist store for zoom level preference |
+  | `packages/core/zoom-store.ts` (new) | High | New Zustand persist store for zoom level preference |
+  | `packages/core/zoom-hook.ts` (new) | High | Shared useZoom() hook applying CSS zoom to document root |
   | `packages/views/settings/components/preferences-tab.tsx` | High | UI controls for zoom selection added alongside theme/language |
   | `packages/views/locales/en/settings.json` | Medium | New i18n keys for zoom section title and level labels |
   | `packages/views/locales/zh-Hans/settings.json` | Medium | Chinese translations for new zoom keys |
-  | `apps/web/` root layout | Low | Apply zoom CSS effect on mount (useEffect reading zoom store) |
-  | `apps/desktop/src/renderer/src/App.tsx` | Low | Apply zoom CSS effect on mount (same useEffect) |
+  | `apps/web/` root layout | Low | Single useZoom() call added to apply zoom CSS effect on mount |
+  | `apps/desktop/src/renderer/src/App.tsx` | Low | Single useZoom() call added to apply zoom CSS effect on mount |
 
   ## Dependencies
 
@@ -117,6 +257,6 @@ content: |
   ## Size Estimate
 
   **S** — The pattern is fully established (theme preference is a direct analogue).
-  Implementation touches ~5 files: one new store, one updated UI component, two locale
-  files, and two app root files for the CSS effect. No new dependencies, no IPC, no
-  backend changes. Estimated effort: a few hours including tests.
+  Implementation touches ~7 files: two new files (zoom store + zoom hook), one updated
+  UI component, two locale files, and two app root files for the useZoom() call.
+  No new dependencies, no IPC, no backend changes.
