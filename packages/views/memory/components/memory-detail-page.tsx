@@ -71,7 +71,7 @@ export function MemoryDetailPage({ id }: MemoryDetailPageProps) {
   // Local title state mirrors the server-side artifact.title until the
   // user types — at which point we drift and only sync back on save or
   // remount.
-  const [titleDraft, setTitleDraft] = useState("");
+  const [titleDraft, setTitleDraft] = useState(() => artifact?.title ?? "");
   useEffect(() => {
     if (artifact) setTitleDraft(artifact.title);
   }, [artifact?.id, artifact?.title]);
