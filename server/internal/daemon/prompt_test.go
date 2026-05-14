@@ -90,8 +90,14 @@ func TestBuildQuickCreatePromptSquadOverride(t *testing.T) {
 	if !strings.Contains(out, "Frontend Squad") {
 		t.Fatalf("missing squad name in quick-create prompt:\n%s", out)
 	}
-	if !strings.Contains(out, "modal squad override") {
+	if !strings.Contains(out, "squad override") {
 		t.Fatalf("missing squad override instruction in quick-create prompt:\n%s", out)
+	}
+	if !strings.Contains(out, "authoritative") {
+		t.Fatalf("squad override instruction must use authoritative language:\n%s", out)
+	}
+	if strings.Contains(out, "When the user names someone") {
+		t.Fatalf("name-lookup rule must be omitted when squad override exists:\n%s", out)
 	}
 	if strings.Contains(out, "default to YOURSELF") {
 		t.Fatalf("self-assignment instruction should be omitted when squad override exists:\n%s", out)
