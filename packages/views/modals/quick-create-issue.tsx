@@ -299,12 +299,12 @@ export function AgentCreatePanel({
     }
   };
 
-  // Switch to the manual form, carrying what the user typed over as the
-  // description (markdown, including any pasted images) so they don't lose
-  // their work. The picked agent becomes the default assignee candidate
-  // (still editable). We seed the shared issue-draft store directly because
-  // the manual panel reads its initial values from there. Persist the mode
-  // flip so the next `c` lands in manual.
+  // "Expand to full editor" (switch to manual) keeps user intent intact:
+  // carry the typed markdown into description and prefill assignee in draft
+  // store. When both squad and agent are picked, squad wins by design so the
+  // manual form mirrors quick-create's explicit squad routing intent.
+  // We seed issue-draft store directly because ManualCreatePanel hydrates
+  // initial values from that store.
   const switchToManual = () => {
     const md = editorRef.current?.getMarkdown() ?? "";
     useIssueDraftStore.getState().setDraft({

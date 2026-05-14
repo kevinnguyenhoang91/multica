@@ -11,6 +11,7 @@ const mockSetPrompt = vi.hoisted(() => vi.fn());
 const mockClearPrompt = vi.hoisted(() => vi.fn());
 const mockSetKeepOpen = vi.hoisted(() => vi.fn());
 const mockSetLastMode = vi.hoisted(() => vi.fn());
+const mockSetDraft = vi.hoisted(() => vi.fn());
 const mockToastSuccess = vi.hoisted(() => vi.fn());
 
 const mockQuickCreateStore = {
@@ -94,6 +95,12 @@ vi.mock("@multica/core/issues/stores/quick-create-store", () => ({
 vi.mock("@multica/core/issues/stores/create-mode-store", () => ({
   useCreateModeStore: (selector?: (state: { setLastMode: typeof mockSetLastMode }) => unknown) =>
     (selector ? selector({ setLastMode: mockSetLastMode }) : { setLastMode: mockSetLastMode }),
+}));
+
+vi.mock("@multica/core/issues/stores/draft-store", () => ({
+  useIssueDraftStore: {
+    getState: () => ({ setDraft: mockSetDraft }),
+  },
 }));
 
 vi.mock("@multica/core/auth", () => ({
@@ -364,5 +371,31 @@ describe("AgentCreatePanel", () => {
       });
     });
     expect(mockSetLastSquadId).toHaveBeenCalledWith("squad-1");
+  });
+
+  it("prefills manual draft with squad when both squad and agent are selected", async () => {
+    const user = userEvent.setup();
+    const onSwitchMode = vi.fn();
+
+    renderPanel({ onClose: vi.fn(), onSwitchMode, isExpanded: false, setIsExpanded: vi.fn() });
+
+    await user.click(screen.getByRole("button", { name: "Select squad" }));
+    await user.type(
+      screen.getByPlaceholderText(
+        'Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"',
+      ),
+      "Route to manual editor",
+    );
+    await user.click(screen.getByRole("button", { name: /Switch to Manual/i }));
+
+    expect(mockSetDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "Persisted draft promptRoute to manual editor",
+        assigneeType: "squad",
+        assigneeId: "squad-1",
+      }),
+    );
+    expect(mockSetLastMode).toHaveBeenCalledWith("manual");
+    expect(onSwitchMode).toHaveBeenCalledTimes(1);
   });
 });

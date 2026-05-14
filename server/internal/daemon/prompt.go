@@ -72,19 +72,18 @@ func buildQuickCreatePrompt(task Task) string {
 		agentID = task.Agent.ID
 		agentName = task.Agent.Name
 	}
-	if agentID != "" {
+	if task.QuickCreateSquadID != "" {
+		if task.QuickCreateSquadName != "" {
+			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to squad %q. This picker selection is authoritative.\n\n", task.QuickCreateSquadID, task.QuickCreateSquadName)
+		} else {
+			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to the squad selected in the quick-create modal. This picker selection is authoritative.\n\n", task.QuickCreateSquadID)
+		}
+	} else if agentID != "" {
 		fmt.Fprintf(&b, "    - When the user did NOT name an assignee, default to YOURSELF: pass `--assignee-id %q` (your agent UUID). The picker agent is the expected owner because the user opened quick-create with you selected — never leave the issue unassigned. Use the UUID flag, not `--assignee <name>`, so the assignment is unambiguous even when other agents share part of your name.\n\n", agentID)
 	} else if agentName != "" {
 		fmt.Fprintf(&b, "    - When the user did NOT name an assignee, default to YOURSELF: pass `--assignee %q`. The picker agent is the expected owner because the user opened quick-create with you selected — never leave the issue unassigned.\n\n", agentName)
 	} else {
 		b.WriteString("    - When the user did NOT name an assignee, default to YOURSELF (the picker agent): pass `--assignee-id <your agent UUID>` (preferred) or `--assignee <your agent name>`. Never leave the issue unassigned.\n\n")
-	}
-	if task.QuickCreateSquadID != "" {
-		if task.QuickCreateSquadName != "" {
-			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to squad %q. This picker selection is authoritative and takes precedence over the default self-assignment rule above.\n\n", task.QuickCreateSquadID, task.QuickCreateSquadName)
-		} else {
-			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to the squad selected in the quick-create modal. This picker selection is authoritative and takes precedence over the default self-assignment rule above.\n\n", task.QuickCreateSquadID)
-		}
 	}
 
 	// project — pinned by the modal when the user picked one, otherwise

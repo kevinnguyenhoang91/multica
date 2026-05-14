@@ -90,7 +90,27 @@ func TestBuildQuickCreatePromptSquadOverride(t *testing.T) {
 	if !strings.Contains(out, "Frontend Squad") {
 		t.Fatalf("missing squad name in quick-create prompt:\n%s", out)
 	}
-	if !strings.Contains(out, "takes precedence over the default self-assignment rule") {
-		t.Fatalf("missing precedence rule in quick-create prompt:\n%s", out)
+	if !strings.Contains(out, "modal squad override") {
+		t.Fatalf("missing squad override instruction in quick-create prompt:\n%s", out)
+	}
+	if strings.Contains(out, "default to YOURSELF") {
+		t.Fatalf("self-assignment instruction should be omitted when squad override exists:\n%s", out)
+	}
+}
+
+func TestBuildQuickCreatePromptSquadOverrideWithoutSquadName(t *testing.T) {
+	const squadID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	out := buildQuickCreatePrompt(Task{
+		QuickCreatePrompt:  "file bug for onboarding flow",
+		QuickCreateSquadID: squadID,
+	})
+	if !strings.Contains(out, "--assignee-id \""+squadID+"\"") {
+		t.Fatalf("missing squad assignee override in quick-create prompt:\n%s", out)
+	}
+	if strings.Contains(out, "squad \"") {
+		t.Fatalf("prompt should not fabricate squad name when lookup failed:\n%s", out)
+	}
+	if strings.Contains(out, "default to YOURSELF") {
+		t.Fatalf("self-assignment instruction should be omitted when squad override exists:\n%s", out)
 	}
 }

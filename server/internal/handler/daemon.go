@@ -1347,8 +1347,6 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 						}); err == nil {
 							resp.QuickCreateSquadName = squad.Name
 						}
-					} else if squad, err := h.Queries.GetSquad(r.Context(), squadUUID); err == nil {
-						resp.QuickCreateSquadName = squad.Name
 					}
 				}
 			}
