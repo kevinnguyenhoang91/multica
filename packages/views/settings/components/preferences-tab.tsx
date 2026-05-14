@@ -49,7 +49,7 @@ const ACCENT_OPTIONS: {
   {
     value: "default",
     labelKey: "default",
-    swatchClass: "bg-accent border-border",
+    swatchClass: "bg-muted border-border",
   },
   { value: "blue", labelKey: "blue", swatchClass: "bg-accent-blue/50" },
   { value: "purple", labelKey: "purple", swatchClass: "bg-accent-purple/50" },
