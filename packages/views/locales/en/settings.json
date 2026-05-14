@@ -4,7 +4,20 @@
       "title": "Theme",
       "light": "Light",
       "dark": "Dark",
-      "system": "System"
+      "system": "System",
+      "accent_title": "Accent color",
+      "accent_current_theme": "Applies to current theme: {{theme}}",
+      "accent_options": {
+        "default": "Default",
+        "blue": "Blue",
+        "purple": "Purple",
+        "pink": "Pink",
+        "red": "Red",
+        "orange": "Orange",
+        "yellow": "Yellow",
+        "green": "Green",
+        "teal": "Teal"
+      }
     },
     "language": {
       "title": "Language",

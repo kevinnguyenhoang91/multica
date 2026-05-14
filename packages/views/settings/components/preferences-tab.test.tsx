@@ -11,12 +11,38 @@ const mockPersist = vi.hoisted(() => vi.fn());
 const mockUpdateMe = vi.hoisted(() => vi.fn());
 const mockReload = vi.hoisted(() => vi.fn());
 const mockToastWarning = vi.hoisted(() => vi.fn());
+const mockSetTheme = vi.hoisted(() => vi.fn());
+const mockSetAccent = vi.hoisted(() => vi.fn());
 const userRef = vi.hoisted(() => ({
   current: null as { id: string } | null,
 }));
+const themeRef = vi.hoisted(() => ({
+  current: "light" as "light" | "dark" | "system",
+}));
+const resolvedThemeRef = vi.hoisted(() => ({
+  current: "light" as "light" | "dark",
+}));
+const accentRef = vi.hoisted(() => ({
+  current: "default" as
+    | "default"
+    | "blue"
+    | "purple"
+    | "pink"
+    | "red"
+    | "orange"
+    | "yellow"
+    | "green"
+    | "teal",
+}));
 
 vi.mock("@multica/ui/components/common/theme-provider", () => ({
-  useTheme: () => ({ theme: "light", setTheme: vi.fn() }),
+  useTheme: () => ({
+    theme: themeRef.current,
+    resolvedTheme: resolvedThemeRef.current,
+    setTheme: mockSetTheme,
+    accent: accentRef.current,
+    setAccent: mockSetAccent,
+  }),
 }));
 
 vi.mock("@multica/core/i18n/react", async () => {
@@ -73,6 +99,9 @@ describe("PreferencesTab — Language switcher", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     userRef.current = null;
+    themeRef.current = "light";
+    resolvedThemeRef.current = "light";
+    accentRef.current = "default";
     vi.useFakeTimers({ shouldAdvanceTime: true });
     Object.defineProperty(window, "location", {
       writable: true,
@@ -142,5 +171,14 @@ describe("PreferencesTab — Language switcher", () => {
       vi.advanceTimersByTime(2500);
     });
     expect(mockReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates accent for the current theme", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<PreferencesTab />, { wrapper: I18nWrapper });
+
+    await user.click(screen.getByRole("radio", { name: "Teal" }));
+
+    expect(mockSetAccent).toHaveBeenCalledWith("teal");
   });
 });
