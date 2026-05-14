@@ -184,8 +184,10 @@ export interface AgentTemplateSummary {
    *  to a generic icon when empty. */
   icon?: string;
   /** Optional semantic color token for the icon badge — one of "info" /
-   *  "success" / "warning" / "primary" / "secondary". Frontend has a
-   *  static class map so Tailwind can JIT-scan all variants. */
+   *  "success" / "warning" / "primary" / "secondary" / "muted" or the
+   *  bright accent variants: "blue" / "purple" / "pink" / "red" /
+   *  "orange" / "yellow" / "green" / "teal". Frontend has a static class
+   *  map so Tailwind can JIT-scan all variants. */
   accent?: string;
   skills: AgentTemplateSkillRef[];
 }
