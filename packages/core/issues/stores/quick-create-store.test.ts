@@ -4,6 +4,7 @@ import { useQuickCreateStore } from "./quick-create-store";
 const RESET_STATE = {
   lastAgentId: null,
   lastProjectId: null,
+  lastSquadId: null,
   prompt: "",
   keepOpen: false,
 };
@@ -33,5 +34,15 @@ describe("quick create store", () => {
 
     setLastProjectId(null);
     expect(useQuickCreateStore.getState().lastProjectId).toBeNull();
+  });
+
+  it("remembers the last squad picked for quick assignment", () => {
+    const { setLastSquadId } = useQuickCreateStore.getState();
+
+    setLastSquadId("squad-1");
+    expect(useQuickCreateStore.getState().lastSquadId).toBe("squad-1");
+
+    setLastSquadId(null);
+    expect(useQuickCreateStore.getState().lastSquadId).toBeNull();
   });
 });

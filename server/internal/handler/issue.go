@@ -866,6 +866,7 @@ type QuickCreateIssueRequest struct {
 	AgentID   string `json:"agent_id"`
 	Prompt    string `json:"prompt"`
 	ProjectID string `json:"project_id,omitempty"`
+	SquadID   string `json:"squad_id,omitempty"`
 }
 
 // QuickCreateIssueResponse echoes the queued task id so the frontend can
@@ -970,8 +971,24 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 		projectUUID = pid
 	}
+	var squadUUID pgtype.UUID
+	if strings.TrimSpace(req.SquadID) != "" {
+		sid, ok := parseUUIDOrBadRequest(w, req.SquadID, "squad_id")
+		if !ok {
+			return
+		}
+		squad, err := h.Queries.GetSquadInWorkspace(r.Context(), db.GetSquadInWorkspaceParams{
+			ID:          sid,
+			WorkspaceID: wsUUID,
+		})
+		if err != nil || squad.ArchivedAt.Valid {
+			writeError(w, http.StatusBadRequest, "squad not found")
+			return
+		}
+		squadUUID = sid
+	}
 
-	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, prompt, projectUUID)
+	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, prompt, projectUUID, squadUUID)
 	if err != nil {
 		slog.Warn("quick-create enqueue failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "failed to enqueue quick-create task")

@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 const mockQuickCreateIssue = vi.hoisted(() => vi.fn());
 const mockSetLastAgentId = vi.hoisted(() => vi.fn());
 const mockSetLastProjectId = vi.hoisted(() => vi.fn());
+const mockSetLastSquadId = vi.hoisted(() => vi.fn());
 const mockSetPrompt = vi.hoisted(() => vi.fn());
 const mockClearPrompt = vi.hoisted(() => vi.fn());
 const mockSetKeepOpen = vi.hoisted(() => vi.fn());
@@ -17,6 +18,8 @@ const mockQuickCreateStore = {
   setLastAgentId: mockSetLastAgentId,
   lastProjectId: null as string | null,
   setLastProjectId: mockSetLastProjectId,
+  lastSquadId: null as string | null,
+  setLastSquadId: mockSetLastSquadId,
   prompt: "Persisted draft prompt",
   setPrompt: mockSetPrompt,
   clearPrompt: mockClearPrompt,
@@ -45,6 +48,11 @@ vi.mock("@tanstack/react-query", () => ({
         return { data: [{ id: "runtime-1", metadata: { cli_version: "1.2.3" } }] };
       case "projects":
         return mockProjectsQuery;
+      case "squads":
+        return {
+          data: [{ id: "squad-1", name: "Frontend Squad", archived_at: null }],
+          isSuccess: true,
+        };
       default:
         return { data: [] };
     }
@@ -71,6 +79,7 @@ vi.mock("@multica/core/paths", () => ({
 vi.mock("@multica/core/workspace/queries", () => ({
   agentListOptions: () => ({ queryKey: ["agents"] }),
   memberListOptions: () => ({ queryKey: ["members"] }),
+  squadListOptions: () => ({ queryKey: ["squads"] }),
 }));
 
 vi.mock("@multica/core/projects/queries", () => ({
@@ -105,6 +114,17 @@ vi.mock("@multica/core/hooks/use-file-upload", () => ({
 
 vi.mock("../issues/components/pickers/assignee-picker", () => ({
   canAssignAgent: () => true,
+  AssigneePicker: ({ onUpdate, trigger }: { onUpdate: (updates: { assignee_type?: string | null; assignee_id?: string | null }) => void; trigger: ReactNode }) => (
+    <div>
+      <div>{trigger}</div>
+      <button
+        type="button"
+        onClick={() => onUpdate({ assignee_type: "squad", assignee_id: "squad-1" })}
+      >
+        Select squad
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../common/actor-avatar", () => ({
@@ -229,6 +249,7 @@ describe("AgentCreatePanel", () => {
     vi.clearAllMocks();
     mockQuickCreateStore.lastAgentId = null;
     mockQuickCreateStore.lastProjectId = null;
+    mockQuickCreateStore.lastSquadId = null;
     mockQuickCreateStore.prompt = "Persisted draft prompt";
     mockQuickCreateStore.keepOpen = false;
     mockProjectsQuery.data = [];
@@ -270,6 +291,7 @@ describe("AgentCreatePanel", () => {
         agent_id: "agent-1",
         prompt: "New agent prompt",
         project_id: undefined,
+        squad_id: undefined,
       });
     });
 
@@ -277,6 +299,7 @@ describe("AgentCreatePanel", () => {
     // No project picked → persisted project preference is cleared so the
     // store stays in sync with the actual outgoing request.
     expect(mockSetLastProjectId).toHaveBeenCalledWith(null);
+    expect(mockSetLastSquadId).toHaveBeenCalledWith(null);
     expect(mockClearPrompt).toHaveBeenCalled();
     expect(mockSetLastMode).toHaveBeenCalledWith("agent");
     expect(onClose).toHaveBeenCalled();
@@ -311,5 +334,35 @@ describe("AgentCreatePanel", () => {
     renderPanel({ onClose: vi.fn(), isExpanded: false, setIsExpanded: vi.fn() });
 
     expect(mockSetLastProjectId).not.toHaveBeenCalled();
+  });
+
+  it("sends the selected squad in the quick-create payload", async () => {
+    const user = userEvent.setup();
+
+    renderPanel({ onClose: vi.fn(), isExpanded: false, setIsExpanded: vi.fn() });
+
+    await user.clear(
+      screen.getByPlaceholderText(
+        'Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"',
+      ),
+    );
+    await user.type(
+      screen.getByPlaceholderText(
+        'Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"',
+      ),
+      "Create onboarding checklist",
+    );
+    await user.click(screen.getByRole("button", { name: "Select squad" }));
+    await user.click(screen.getByRole("button", { name: /^Create \(/i }));
+
+    await waitFor(() => {
+      expect(mockQuickCreateIssue).toHaveBeenCalledWith({
+        agent_id: "agent-1",
+        prompt: "Create onboarding checklist",
+        project_id: undefined,
+        squad_id: "squad-1",
+      });
+    });
+    expect(mockSetLastSquadId).toHaveBeenCalledWith("squad-1");
   });
 });

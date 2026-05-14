@@ -174,6 +174,8 @@ type AgentTaskResponse struct {
 	AutopilotSource         string                `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
 	AutopilotTriggerPayload json.RawMessage       `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string                `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
+	QuickCreateSquadID      string                `json:"quick_create_squad_id,omitempty"`     // optional squad preselected in quick-create modal
+	QuickCreateSquadName    string                `json:"quick_create_squad_name,omitempty"`   // resolved squad name for prompt readability
 	Kind                    string                `json:"kind"`                                // discriminator: "comment" | "autopilot" | "chat" | "quick_create" | "direct" — used by the activity row to label tasks that have no linked issue
 }
 

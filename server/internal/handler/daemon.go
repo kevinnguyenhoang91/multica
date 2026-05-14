@@ -1337,6 +1337,21 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			hasQuickCreate = true
 			resp.QuickCreatePrompt = qc.Prompt
 			resp.WorkspaceID = qc.WorkspaceID
+			if qc.SquadID != "" {
+				resp.QuickCreateSquadID = qc.SquadID
+				if squadUUID, err := util.ParseUUID(qc.SquadID); err == nil {
+					if wsUUID, werr := util.ParseUUID(qc.WorkspaceID); werr == nil {
+						if squad, err := h.Queries.GetSquadInWorkspace(r.Context(), db.GetSquadInWorkspaceParams{
+							ID:          squadUUID,
+							WorkspaceID: wsUUID,
+						}); err == nil {
+							resp.QuickCreateSquadName = squad.Name
+						}
+					} else if squad, err := h.Queries.GetSquad(r.Context(), squadUUID); err == nil {
+						resp.QuickCreateSquadName = squad.Name
+					}
+				}
+			}
 
 			// When the user picked a project in the modal, surface its title
 			// and resources to the daemon so the agent has the same context

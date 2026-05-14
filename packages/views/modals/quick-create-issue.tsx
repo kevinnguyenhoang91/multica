@@ -16,7 +16,7 @@ import { Switch } from "@multica/ui/components/ui/switch";
 import { api, ApiError } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useCurrentWorkspace } from "@multica/core/paths";
-import { agentListOptions } from "@multica/core/workspace/queries";
+import { agentListOptions, memberListOptions, squadListOptions } from "@multica/core/workspace/queries";
 import { projectListOptions } from "@multica/core/projects/queries";
 import { useQuickCreateStore } from "@multica/core/issues/stores/quick-create-store";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
@@ -33,9 +33,8 @@ import type { Agent } from "@multica/core/types";
 import { ActorAvatar } from "../common/actor-avatar";
 import { PillButton } from "../common/pill-button";
 import { ProjectPicker } from "../projects/components/project-picker";
-import { canAssignAgent } from "../issues/components/pickers/assignee-picker";
+import { AssigneePicker, canAssignAgent } from "../issues/components/pickers/assignee-picker";
 import { useAuthStore } from "@multica/core/auth";
-import { memberListOptions } from "@multica/core/workspace/queries";
 import {
   ContentEditor,
   type ContentEditorRef,
@@ -104,6 +103,8 @@ export function AgentCreatePanel({
   const setLastAgentId = useQuickCreateStore((s) => s.setLastAgentId);
   const lastProjectId = useQuickCreateStore((s) => s.lastProjectId);
   const setLastProjectId = useQuickCreateStore((s) => s.setLastProjectId);
+  const lastSquadId = useQuickCreateStore((s) => s.lastSquadId);
+  const setLastSquadId = useQuickCreateStore((s) => s.setLastSquadId);
   const promptDraft = useQuickCreateStore((s) => s.prompt);
   const setPrompt = useQuickCreateStore((s) => s.setPrompt);
   const clearPrompt = useQuickCreateStore((s) => s.clearPrompt);
@@ -142,6 +143,17 @@ export function AgentCreatePanel({
     const seed = (data?.project_id as string | undefined) ?? lastProjectId;
     return seed ?? null;
   });
+  const { data: squads = [], isSuccess: squadsLoaded } = useQuery(
+    squadListOptions(wsId),
+  );
+  const [squadId, setSquadId] = useState<string | null>(() => {
+    const seed = (data?.squad_id as string | undefined) ?? lastSquadId;
+    return seed ?? null;
+  });
+  const selectedSquad = useMemo(
+    () => squads.find((s) => s.id === squadId),
+    [squads, squadId],
+  );
 
   // Stale-id sweep. Once the project list query has actually resolved
   // (`isSuccess` — distinct from "data is the empty default during loading"),
@@ -155,6 +167,12 @@ export function AgentCreatePanel({
     setProjectId(null);
     if (lastProjectId === projectId) setLastProjectId(null);
   }, [projectsLoaded, projects, projectId, lastProjectId, setLastProjectId]);
+  useEffect(() => {
+    if (!squadsLoaded || squadId === null) return;
+    if (squads.some((s) => !s.archived_at && s.id === squadId)) return;
+    setSquadId(null);
+    if (lastSquadId === squadId) setLastSquadId(null);
+  }, [squadsLoaded, squads, squadId, lastSquadId, setLastSquadId]);
 
   // Daemon CLI version gate. The agent-create flow needs the runtime's
   // bundled multica CLI to be ≥ MIN_QUICK_CREATE_CLI_VERSION; older
@@ -220,9 +238,11 @@ export function AgentCreatePanel({
         agent_id: agentId,
         prompt: md,
         project_id: projectId ?? undefined,
+        squad_id: squadId ?? undefined,
       });
       setLastAgentId(agentId);
       setLastProjectId(projectId);
+      setLastSquadId(squadId);
       clearPrompt();
       setLastMode("agent");
       toast.success(t(($) => $.create_issue.agent.toast_sent), {
@@ -289,7 +309,9 @@ export function AgentCreatePanel({
     const md = editorRef.current?.getMarkdown() ?? "";
     useIssueDraftStore.getState().setDraft({
       description: md,
-      ...(agentId
+      ...(squadId
+        ? { assigneeType: "squad" as const, assigneeId: squadId }
+        : agentId
         ? { assigneeType: "agent" as const, assigneeId: agentId }
         : {}),
     });
@@ -447,6 +469,34 @@ export function AgentCreatePanel({
             projectId={projectId}
             onUpdate={(u) => setProjectId(u.project_id ?? null)}
             triggerRender={<PillButton />}
+            align="start"
+          />
+          <AssigneePicker
+            assigneeType={squadId ? "squad" : null}
+            assigneeId={squadId}
+            allowedTypes={["squad"]}
+            onUpdate={(u) => {
+              const nextType = u.assignee_type;
+              const nextId = u.assignee_id;
+              if (nextType === "squad") {
+                setSquadId(nextId ?? null);
+                return;
+              }
+              setSquadId(null);
+            }}
+            triggerRender={<PillButton />}
+            trigger={
+              squadId ? (
+                <>
+                  <ActorAvatar actorType="squad" actorId={squadId} size={16} />
+                  <span className="truncate">
+                    {selectedSquad?.name ?? t(($) => $.create_issue.agent.squad_label)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">{t(($) => $.create_issue.agent.squad_placeholder)}</span>
+              )
+            }
             align="start"
           />
         </div>

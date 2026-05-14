@@ -59,6 +59,8 @@ type Task struct {
 	AutopilotSource         string          `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
 	AutopilotTriggerPayload json.RawMessage `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string          `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
+	QuickCreateSquadID      string          `json:"quick_create_squad_id,omitempty"`     // optional squad chosen in quick-create modal
+	QuickCreateSquadName    string          `json:"quick_create_squad_name,omitempty"`   // optional squad name for prompt readability
 }
 
 // ChatAttachmentMeta is the structured attachment metadata the daemon

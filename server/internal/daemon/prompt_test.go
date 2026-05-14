@@ -76,3 +76,21 @@ func TestBuildQuickCreatePromptProjectPinning(t *testing.T) {
 		t.Errorf("buildQuickCreatePrompt without project must NOT mention --project, got:\n%s", plain)
 	}
 }
+
+func TestBuildQuickCreatePromptSquadOverride(t *testing.T) {
+	const squadID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	out := buildQuickCreatePrompt(Task{
+		QuickCreatePrompt:    "file bug for onboarding flow",
+		QuickCreateSquadID:   squadID,
+		QuickCreateSquadName: "Frontend Squad",
+	})
+	if !strings.Contains(out, "--assignee-id \""+squadID+"\"") {
+		t.Fatalf("missing squad assignee override in quick-create prompt:\n%s", out)
+	}
+	if !strings.Contains(out, "Frontend Squad") {
+		t.Fatalf("missing squad name in quick-create prompt:\n%s", out)
+	}
+	if !strings.Contains(out, "takes precedence over the default self-assignment rule") {
+		t.Fatalf("missing precedence rule in quick-create prompt:\n%s", out)
+	}
+}

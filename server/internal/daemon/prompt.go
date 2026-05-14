@@ -79,6 +79,13 @@ func buildQuickCreatePrompt(task Task) string {
 	} else {
 		b.WriteString("    - When the user did NOT name an assignee, default to YOURSELF (the picker agent): pass `--assignee-id <your agent UUID>` (preferred) or `--assignee <your agent name>`. Never leave the issue unassigned.\n\n")
 	}
+	if task.QuickCreateSquadID != "" {
+		if task.QuickCreateSquadName != "" {
+			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to squad %q. This picker selection is authoritative and takes precedence over the default self-assignment rule above.\n\n", task.QuickCreateSquadID, task.QuickCreateSquadName)
+		} else {
+			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to the squad selected in the quick-create modal. This picker selection is authoritative and takes precedence over the default self-assignment rule above.\n\n", task.QuickCreateSquadID)
+		}
+	}
 
 	// project — pinned by the modal when the user picked one, otherwise
 	// omitted so the platform routes to the workspace default. Always pass

@@ -470,6 +470,7 @@ type QuickCreateContext struct {
 	RequesterID string `json:"requester_id"`
 	WorkspaceID string `json:"workspace_id"`
 	ProjectID   string `json:"project_id,omitempty"`
+	SquadID     string `json:"squad_id,omitempty"`
 }
 
 // QuickCreateContextType marks a task as a quick-create job.
@@ -482,10 +483,10 @@ const QuickCreateContextType = "quick_create"
 // (not archived, has a runtime) so the API can reject up-front rather than
 // queue a task no one will ever claim.
 //
-// projectID is optional (zero-valued pgtype.UUID when the user didn't pick
-// one). The handler is responsible for validating it belongs to the same
-// workspace before passing it in.
-func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, requesterID pgtype.UUID, agentID pgtype.UUID, prompt string, projectID pgtype.UUID) (db.AgentTaskQueue, error) {
+// projectID/squadID are optional (zero-valued pgtype.UUID when not picked).
+// The handler is responsible for validating they belong to the same workspace
+// before passing them in.
+func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, requesterID pgtype.UUID, agentID pgtype.UUID, prompt string, projectID pgtype.UUID, squadID pgtype.UUID) (db.AgentTaskQueue, error) {
 	agent, err := s.Queries.GetAgent(ctx, agentID)
 	if err != nil {
 		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
@@ -505,6 +506,9 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	}
 	if projectID.Valid {
 		payload.ProjectID = util.UUIDToString(projectID)
+	}
+	if squadID.Valid {
+		payload.SquadID = util.UUIDToString(squadID)
 	}
 	contextJSON, err := json.Marshal(payload)
 	if err != nil {
@@ -527,6 +531,7 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 		"requester_id", util.UUIDToString(requesterID),
 		"workspace_id", util.UUIDToString(workspaceID),
 		"project_id", payload.ProjectID,
+		"squad_id", payload.SquadID,
 	)
 	// Match every other Enqueue* path: kick the daemon WS so the task
 	// gets claimed promptly instead of waiting for the next 30 s poll

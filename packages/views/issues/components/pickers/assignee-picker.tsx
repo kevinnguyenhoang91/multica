@@ -40,6 +40,7 @@ export function AssigneePicker({
   assigneeType,
   assigneeId,
   onUpdate,
+  allowedTypes,
   trigger: customTrigger,
   triggerRender,
   open: controlledOpen,
@@ -49,6 +50,7 @@ export function AssigneePicker({
   assigneeType: IssueAssigneeType | null;
   assigneeId: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+  allowedTypes?: IssueAssigneeType[];
   trigger?: React.ReactNode;
   triggerRender?: React.ReactElement;
   open?: boolean;
@@ -81,17 +83,25 @@ export function AssigneePicker({
   }, [frequency]);
 
   const getFreq = (type: string, id: string) => freqMap.get(`${type}:${id}`) ?? 0;
+  const allows = (type: IssueAssigneeType) =>
+    !allowedTypes || allowedTypes.includes(type);
 
   const query = filter.trim().toLowerCase();
-  const filteredMembers = members
-    .filter((m) => m.name.toLowerCase().includes(query))
-    .sort((a, b) => getFreq("member", b.user_id) - getFreq("member", a.user_id));
-  const filteredAgents = agents
-    .filter((a) => !a.archived_at && a.name.toLowerCase().includes(query))
-    .sort((a, b) => getFreq("agent", b.id) - getFreq("agent", a.id));
-  const filteredSquads = squads
-    .filter((s) => !s.archived_at && s.name.toLowerCase().includes(query))
-    .sort((a, b) => getFreq("squad", b.id) - getFreq("squad", a.id));
+  const filteredMembers = allows("member")
+    ? members
+      .filter((m) => m.name.toLowerCase().includes(query))
+      .sort((a, b) => getFreq("member", b.user_id) - getFreq("member", a.user_id))
+    : [];
+  const filteredAgents = allows("agent")
+    ? agents
+      .filter((a) => !a.archived_at && a.name.toLowerCase().includes(query))
+      .sort((a, b) => getFreq("agent", b.id) - getFreq("agent", a.id))
+    : [];
+  const filteredSquads = allows("squad")
+    ? squads
+      .filter((s) => !s.archived_at && s.name.toLowerCase().includes(query))
+      .sort((a, b) => getFreq("squad", b.id) - getFreq("squad", a.id))
+    : [];
 
   const isSelected = (type: string, id: string) =>
     assigneeType === type && assigneeId === id;
