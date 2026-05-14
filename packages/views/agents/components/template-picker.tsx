@@ -315,15 +315,6 @@ const ACCENTS: Record<string, string> = {
   primary: "bg-primary/10 text-primary",
   secondary: "bg-secondary text-secondary-foreground",
   muted: DEFAULT_ACCENT,
-  /* Bright accent variants — written verbatim for Tailwind JIT scanning */
-  blue: "bg-accent-blue/10 text-accent-blue",
-  purple: "bg-accent-purple/10 text-accent-purple",
-  pink: "bg-accent-pink/10 text-accent-pink",
-  red: "bg-accent-red/10 text-accent-red",
-  orange: "bg-accent-orange/10 text-accent-orange",
-  yellow: "bg-accent-yellow/10 text-accent-yellow",
-  green: "bg-accent-green/10 text-accent-green",
-  teal: "bg-accent-teal/10 text-accent-teal",
 };
 
 /** Exposed for the detail / form steps so they can render the same icon

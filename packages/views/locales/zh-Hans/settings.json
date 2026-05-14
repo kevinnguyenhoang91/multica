@@ -4,20 +4,7 @@
       "title": "主题",
       "light": "浅色",
       "dark": "深色",
-      "system": "跟随系统",
-      "accent_title": "强调色",
-      "accent_current_theme": "应用到当前主题：{{theme}}",
-      "accent_options": {
-        "default": "默认",
-        "blue": "蓝色",
-        "purple": "紫色",
-        "pink": "粉色",
-        "red": "红色",
-        "orange": "橙色",
-        "yellow": "黄色",
-        "green": "绿色",
-        "teal": "青色"
-      }
+      "system": "跟随系统"
     },
     "language": {
       "title": "语言",
