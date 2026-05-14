@@ -64,8 +64,6 @@ func buildQuickCreatePrompt(task Task) string {
 	b.WriteString("- **priority**: one of `urgent`, `high`, `medium`, `low`, or omit. Map P0/P1 → urgent/high; \"asap\" → urgent. If unspecified, omit.\n\n")
 
 	// assignee
-	b.WriteString("- **assignee**:\n")
-	b.WriteString("    - When the user names someone (\"assign to X\" / \"@X\"), call `multica workspace members --output json` (and `multica agent list --output json` if it might be an agent) and find the matching entity by display name. On a clean unambiguous match, prefer `--assignee-id <uuid>` using the `user_id` (member) or `id` (agent) from that JSON — UUID matching is exact and robust to name collisions in workspaces with overlapping names. `--assignee <name>` (fuzzy) is acceptable as a fallback when names are unambiguous. On no match or ambiguous match, do NOT pass either flag — instead append a final line to the description: `Unrecognized assignee: X`.\n")
 	agentID := ""
 	agentName := ""
 	if task.Agent != nil {
@@ -73,17 +71,25 @@ func buildQuickCreatePrompt(task Task) string {
 		agentName = task.Agent.Name
 	}
 	if task.QuickCreateSquadID != "" {
+		// Squad selected in the modal: this is the only assignee instruction.
+		// Drop all other bullets so the LLM cannot mis-apply a name-lookup
+		// rule or default to its own UUID. The squad override is authoritative.
+		b.WriteString("- **assignee**: ")
 		if task.QuickCreateSquadName != "" {
-			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to squad %q. This picker selection is authoritative.\n\n", task.QuickCreateSquadID, task.QuickCreateSquadName)
+			fmt.Fprintf(&b, "**squad override (authoritative)** — the user selected squad %q in the quick-create modal. You MUST pass `--assignee-id %q`. Do NOT look up members, agents, or use your own UUID — the modal selection is final.\n\n", task.QuickCreateSquadName, task.QuickCreateSquadID)
 		} else {
-			fmt.Fprintf(&b, "    - **modal squad override**: required for this run. Pass `--assignee-id %q` so the issue is assigned to the squad selected in the quick-create modal. This picker selection is authoritative.\n\n", task.QuickCreateSquadID)
+			fmt.Fprintf(&b, "**squad override (authoritative)** — the user selected a squad in the quick-create modal. You MUST pass `--assignee-id %q`. Do NOT look up members, agents, or use your own UUID — the modal selection is final.\n\n", task.QuickCreateSquadID)
 		}
-	} else if agentID != "" {
-		fmt.Fprintf(&b, "    - When the user did NOT name an assignee, default to YOURSELF: pass `--assignee-id %q` (your agent UUID). The picker agent is the expected owner because the user opened quick-create with you selected — never leave the issue unassigned. Use the UUID flag, not `--assignee <name>`, so the assignment is unambiguous even when other agents share part of your name.\n\n", agentID)
-	} else if agentName != "" {
-		fmt.Fprintf(&b, "    - When the user did NOT name an assignee, default to YOURSELF: pass `--assignee %q`. The picker agent is the expected owner because the user opened quick-create with you selected — never leave the issue unassigned.\n\n", agentName)
 	} else {
-		b.WriteString("    - When the user did NOT name an assignee, default to YOURSELF (the picker agent): pass `--assignee-id <your agent UUID>` (preferred) or `--assignee <your agent name>`. Never leave the issue unassigned.\n\n")
+		b.WriteString("- **assignee**:\n")
+		b.WriteString("    - When the user names someone (\"assign to X\" / \"@X\"), call `multica workspace members --output json` (and `multica agent list --output json` if it might be an agent) and find the matching entity by display name. On a clean unambiguous match, prefer `--assignee-id <uuid>` using the `user_id` (member) or `id` (agent) from that JSON — UUID matching is exact and robust to name collisions in workspaces with overlapping names. `--assignee <name>` (fuzzy) is acceptable as a fallback when names are unambiguous. On no match or ambiguous match, do NOT pass either flag — instead append a final line to the description: `Unrecognized assignee: X`.\n")
+		if agentID != "" {
+			fmt.Fprintf(&b, "    - When the user did NOT name an assignee, default to YOURSELF: pass `--assignee-id %q` (your agent UUID). The picker agent is the expected owner because the user opened quick-create with you selected — never leave the issue unassigned. Use the UUID flag, not `--assignee <name>`, so the assignment is unambiguous even when other agents share part of your name.\n\n", agentID)
+		} else if agentName != "" {
+			fmt.Fprintf(&b, "    - When the user did NOT name an assignee, default to YOURSELF: pass `--assignee %q`. The picker agent is the expected owner because the user opened quick-create with you selected — never leave the issue unassigned.\n\n", agentName)
+		} else {
+			b.WriteString("    - When the user did NOT name an assignee, default to YOURSELF (the picker agent): pass `--assignee-id <your agent UUID>` (preferred) or `--assignee <your agent name>`. Never leave the issue unassigned.\n\n")
+		}
 	}
 
 	// project — pinned by the modal when the user picked one, otherwise
