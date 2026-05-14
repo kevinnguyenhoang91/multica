@@ -792,12 +792,17 @@ func TestResolveAssigneeByIDStrict(t *testing.T) {
 		{"id": "5fb87ac7-23b5-4a7a-81fa-ed295a54545d", "name": "J"},
 		{"id": "192b9cca-2222-2222-2222-222222222222", "name": "Open Claw - J"},
 	}
+	squadsResp := []map[string]any{
+		{"id": "cccccccc-3333-3333-3333-333333333333", "name": "Engineering Squad"},
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/workspaces/ws-1/members":
 			json.NewEncoder(w).Encode(membersResp)
 		case "/api/agents":
 			json.NewEncoder(w).Encode(agentsResp)
+		case "/api/squads":
+			json.NewEncoder(w).Encode(squadsResp)
 		default:
 			http.NotFound(w, r)
 		}
@@ -840,6 +845,16 @@ func TestResolveAssigneeByIDStrict(t *testing.T) {
 		}
 	})
 
+	t.Run("UUID resolves a squad", func(t *testing.T) {
+		aType, aID, err := resolveAssigneeByID(ctx, client, "cccccccc-3333-3333-3333-333333333333")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if aType != "squad" || aID != "cccccccc-3333-3333-3333-333333333333" {
+			t.Errorf("got (%q, %q), want Engineering Squad", aType, aID)
+		}
+	})
+
 	t.Run("non-UUID input is rejected without name fallback", func(t *testing.T) {
 		_, _, err := resolveAssigneeByID(ctx, client, "Alice")
 		if err == nil {
@@ -862,7 +877,7 @@ func TestResolveAssigneeByIDStrict(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for missing entity")
 		}
-		if !strings.Contains(err.Error(), "no member or agent") {
+		if !strings.Contains(err.Error(), "no member, agent, or squad") {
 			t.Errorf("expected not-found error, got: %v", err)
 		}
 	})
@@ -893,6 +908,8 @@ func TestPickAssigneeFromFlags(t *testing.T) {
 			json.NewEncoder(w).Encode(membersResp)
 		case "/api/agents":
 			json.NewEncoder(w).Encode(agentsResp)
+		case "/api/squads":
+			json.NewEncoder(w).Encode([]map[string]any{})
 		default:
 			http.NotFound(w, r)
 		}
@@ -1093,6 +1110,9 @@ func TestIssueSubscriberMutationBody(t *testing.T) {
 					return
 				case "/api/agents":
 					json.NewEncoder(w).Encode(tt.agents)
+					return
+				case "/api/squads":
+					json.NewEncoder(w).Encode([]map[string]any{})
 					return
 				}
 				gotPath = r.URL.Path

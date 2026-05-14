@@ -1325,8 +1325,8 @@ func runIssueSubscriberMutation(cmd *cobra.Command, issueID, action string) erro
 // ---------------------------------------------------------------------------
 
 type assigneeMatch struct {
-	Type string // "member" or "agent"
-	ID   string // user_id for members, agent id for agents
+	Type string // "member", "agent", or "squad"
+	ID   string // user_id for members, id for agents/squads
 	Name string
 }
 
@@ -1386,9 +1386,19 @@ func resolveAssignee(ctx context.Context, client *cli.APIClient, name string) (s
 		}
 	}
 
-	// If both fetches failed, report the errors instead of a misleading "not found".
-	if len(errs) == 2 {
-		return "", "", fmt.Errorf("failed to resolve assignee: %v; %v", errs[0], errs[1])
+	// Search squads.
+	var squads []map[string]any
+	if err := client.GetJSON(ctx, "/api/squads", &squads); err != nil {
+		errs = append(errs, fmt.Errorf("fetch squads: %w", err))
+	} else {
+		for _, s := range squads {
+			classify("squad", strVal(s, "id"), strVal(s, "name"))
+		}
+	}
+
+	// If all three fetches failed, report the errors instead of a misleading "not found".
+	if len(errs) == 3 {
+		return "", "", fmt.Errorf("failed to resolve assignee: %v; %v; %v", errs[0], errs[1], errs[2])
 	}
 
 	for _, bucket := range [][]assigneeMatch{idMatches, exactMatches, substringMatches} {
@@ -1401,7 +1411,7 @@ func resolveAssignee(ctx context.Context, client *cli.APIClient, name string) (s
 			return "", "", ambiguousAssigneeError(input, bucket)
 		}
 	}
-	return "", "", fmt.Errorf("no member or agent found matching %q", input)
+	return "", "", fmt.Errorf("no member, agent, or squad found matching %q", input)
 }
 
 func ambiguousAssigneeError(input string, matches []assigneeMatch) error {
@@ -1413,9 +1423,9 @@ func ambiguousAssigneeError(input string, matches []assigneeMatch) error {
 }
 
 // resolveAssigneeByID strictly resolves a canonical UUID to (assignee_type,
-// assignee_id) by looking it up against the workspace's members and agents.
-// It is the deterministic counterpart to resolveAssignee: callers that already
-// hold a UUID (e.g. agents reading IDs from `multica workspace members
+// assignee_id) by looking it up against the workspace's members, agents, and
+// squads. It is the deterministic counterpart to resolveAssignee: callers that
+// already hold a UUID (e.g. agents reading IDs from `multica workspace members
 // --output json`) should use this instead of round-tripping through name
 // matching, which can be ambiguous in workspaces with overlapping names.
 func resolveAssigneeByID(ctx context.Context, client *cli.APIClient, id string) (string, string, error) {
@@ -1434,8 +1444,11 @@ func resolveAssigneeByID(ctx context.Context, client *cli.APIClient, id string) 
 	agentPath := "/api/agents?" + url.Values{"workspace_id": {client.WorkspaceID}}.Encode()
 	agentErr := client.GetJSON(ctx, agentPath, &agents)
 
-	if memberErr != nil && agentErr != nil {
-		return "", "", fmt.Errorf("failed to resolve assignee: %v; %v", memberErr, agentErr)
+	var squads []map[string]any
+	squadErr := client.GetJSON(ctx, "/api/squads", &squads)
+
+	if memberErr != nil && agentErr != nil && squadErr != nil {
+		return "", "", fmt.Errorf("failed to resolve assignee: %v; %v; %v", memberErr, agentErr, squadErr)
 	}
 
 	for _, m := range members {
@@ -1448,8 +1461,13 @@ func resolveAssigneeByID(ctx context.Context, client *cli.APIClient, id string) 
 			return "agent", strVal(a, "id"), nil
 		}
 	}
+	for _, s := range squads {
+		if strings.EqualFold(strVal(s, "id"), input) {
+			return "squad", strVal(s, "id"), nil
+		}
+	}
 
-	return "", "", fmt.Errorf("no member or agent found with ID %q", input)
+	return "", "", fmt.Errorf("no member, agent, or squad found with ID %q", input)
 }
 
 // pickAssigneeFromFlags reads a (name-flag, id-flag) pair off cmd and resolves
