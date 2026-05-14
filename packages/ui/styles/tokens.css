@@ -132,9 +132,9 @@
     --accent-yellow:            oklch(0.84 0.20 100);
     --accent-yellow-foreground: oklch(0.141 0.005 285.823);
     --accent-green:             oklch(0.54 0.22 150);
-    --accent-green-foreground:  oklch(0.985 0 0);
+    --accent-green-foreground:  oklch(0.141 0.005 285.823);
     --accent-teal:              oklch(0.54 0.20 190);
-    --accent-teal-foreground:   oklch(0.985 0 0);
+    --accent-teal-foreground:   oklch(0.141 0.005 285.823);
 }
 
 .dark {
