@@ -51,14 +51,14 @@ const ACCENT_OPTIONS: {
     labelKey: "default",
     swatchClass: "bg-accent border-border",
   },
-  { value: "blue", labelKey: "blue", swatchClass: "bg-accent-blue" },
-  { value: "purple", labelKey: "purple", swatchClass: "bg-accent-purple" },
-  { value: "pink", labelKey: "pink", swatchClass: "bg-accent-pink" },
-  { value: "red", labelKey: "red", swatchClass: "bg-accent-red" },
-  { value: "orange", labelKey: "orange", swatchClass: "bg-accent-orange" },
-  { value: "yellow", labelKey: "yellow", swatchClass: "bg-accent-yellow" },
-  { value: "green", labelKey: "green", swatchClass: "bg-accent-green" },
-  { value: "teal", labelKey: "teal", swatchClass: "bg-accent-teal" },
+  { value: "blue", labelKey: "blue", swatchClass: "bg-accent-blue/50" },
+  { value: "purple", labelKey: "purple", swatchClass: "bg-accent-purple/50" },
+  { value: "pink", labelKey: "pink", swatchClass: "bg-accent-pink/50" },
+  { value: "red", labelKey: "red", swatchClass: "bg-accent-red/50" },
+  { value: "orange", labelKey: "orange", swatchClass: "bg-accent-orange/50" },
+  { value: "yellow", labelKey: "yellow", swatchClass: "bg-accent-yellow/50" },
+  { value: "green", labelKey: "green", swatchClass: "bg-accent-green/50" },
+  { value: "teal", labelKey: "teal", swatchClass: "bg-accent-teal/50" },
 ];
 
 function WindowMockup({
@@ -286,7 +286,9 @@ export function PreferencesTab() {
                 onClick={() => setAccent(opt.value)}
                 className={cn(
                   "flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
-                  active
+                  opt.value === "default"
+                    ? "border-border text-foreground hover:border-foreground/30"
+                    : active
                     ? "border-brand bg-brand/10 font-medium text-foreground"
                     : "border-border text-muted-foreground hover:border-foreground/30",
                 )}
