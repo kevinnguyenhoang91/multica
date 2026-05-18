@@ -210,6 +210,7 @@ const mockApiObj = vi.hoisted(() => ({
   listTaskMessages: vi.fn().mockResolvedValue([]),
   listChildIssues: vi.fn().mockResolvedValue({ issues: [] }),
   listIssues: vi.fn().mockResolvedValue({ issues: [], total: 0 }),
+  listIssuePullRequests: vi.fn().mockResolvedValue({ pull_requests: [] }),
   uploadFile: vi.fn(),
   listIssueReactions: vi.fn().mockResolvedValue([]),
   addIssueReaction: vi.fn(),
@@ -735,6 +736,48 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getByText("Created by")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Updated")).toBeInTheDocument();
+  });
+
+  it("renders comment-derived links in sidebar with PR links split from other URLs", async () => {
+    mockApiObj.listTimeline.mockResolvedValue([
+      ...mockTimeline,
+      {
+        type: "comment",
+        id: "comment-3",
+        actor_type: "agent",
+        actor_id: "agent-1",
+        content: "PR: https://github.com/acme/multica/pull/42 and docs: https://docs.example.com/spec",
+        parent_id: null,
+        created_at: "2026-01-18T00:00:00Z",
+        updated_at: "2026-01-18T00:00:00Z",
+        comment_type: "comment",
+      },
+      {
+        type: "comment",
+        id: "comment-4",
+        actor_type: "member",
+        actor_id: "user-1",
+        content: "Duplicate PR link https://github.com/acme/multica/pull/42",
+        parent_id: null,
+        created_at: "2026-01-19T00:00:00Z",
+        updated_at: "2026-01-19T00:00:00Z",
+        comment_type: "comment",
+      },
+    ] as TimelineEntry[]);
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Comment links")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Pull requests from comments")).toBeInTheDocument();
+    expect(screen.getByText("Other links from comments")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "github.com/acme/multica/pull/42" }))
+      .toHaveAttribute("href", "https://github.com/acme/multica/pull/42");
+    expect(screen.getByRole("link", { name: "docs.example.com/spec" }))
+      .toHaveAttribute("href", "https://docs.example.com/spec");
+    expect(screen.getAllByRole("link", { name: "github.com/acme/multica/pull/42" })).toHaveLength(1);
   });
 
   it("shows 'not found' message when issue does not exist", async () => {
