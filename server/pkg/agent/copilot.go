@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -208,6 +209,23 @@ func (b *copilotBackend) Execute(ctx context.Context, prompt string, opts ExecOp
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 
 	args := buildCopilotArgs(prompt, opts, b.cfg.Logger)
+	var mcpConfigPath string
+	var mcpFileCleanup func()
+	if len(opts.McpConfig) > 0 {
+		path, err := writeMcpConfigToTemp(opts.McpConfig)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		mcpConfigPath = path
+		mcpFileCleanup = func() { os.Remove(mcpConfigPath) }
+		args = append(args, "--additional-mcp-config", mcpConfigPath)
+	}
+	defer func() {
+		if mcpFileCleanup != nil {
+			mcpFileCleanup()
+		}
+	}()
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)
 	hideAgentWindow(cmd)
@@ -230,6 +248,7 @@ func (b *copilotBackend) Execute(ctx context.Context, prompt string, opts ExecOp
 		cancel()
 		return nil, fmt.Errorf("start copilot: %w", err)
 	}
+	mcpFileCleanup = nil
 
 	b.cfg.Logger.Info("copilot started", "pid", cmd.Process.Pid, "cwd", opts.Cwd, "model", opts.Model)
 
@@ -240,6 +259,9 @@ func (b *copilotBackend) Execute(ctx context.Context, prompt string, opts ExecOp
 		defer cancel()
 		defer close(msgCh)
 		defer close(resCh)
+		if mcpConfigPath != "" {
+			defer os.Remove(mcpConfigPath)
+		}
 
 		startTime := time.Now()
 		seedModel := opts.Model
@@ -422,16 +444,17 @@ type copilotCodeChanges struct {
 // copilotBlockedArgs are flags hardcoded by the daemon that must not be
 // overridden by user-configured custom_args.
 var copilotBlockedArgs = map[string]blockedArgMode{
-	"-p":                blockedWithValue,
-	"--output-format":   blockedWithValue,
-	"--allow-all":       blockedStandalone, // tools + paths + URLs
-	"--allow-all-tools": blockedStandalone,
-	"--allow-all-paths": blockedStandalone,
-	"--allow-all-urls":  blockedStandalone,
-	"--yolo":            blockedStandalone,
-	"--no-ask-user":     blockedStandalone,
-	"--resume":          blockedWithValue,  // managed via ExecOptions.ResumeSessionID
-	"--acp":             blockedStandalone, // prevent switching to ACP mode
+	"-p":                      blockedWithValue,
+	"--output-format":         blockedWithValue,
+	"--additional-mcp-config": blockedWithValue,  // set by daemon from agent.mcp_config
+	"--allow-all":             blockedStandalone, // tools + paths + URLs
+	"--allow-all-tools":       blockedStandalone,
+	"--allow-all-paths":       blockedStandalone,
+	"--allow-all-urls":        blockedStandalone,
+	"--yolo":                  blockedStandalone,
+	"--no-ask-user":           blockedStandalone,
+	"--resume":                blockedWithValue,  // managed via ExecOptions.ResumeSessionID
+	"--acp":                   blockedStandalone, // prevent switching to ACP mode
 }
 
 // buildCopilotArgs assembles the argv for a one-shot copilot invocation.
