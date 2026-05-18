@@ -113,8 +113,17 @@ describe("McpConfigTab", () => {
     expect(
       screen.getByText("This runtime ignores MCP config"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Only Claude Code currently consumes MCP config/))
-      .toBeInTheDocument();
+    expect(
+      screen.getByText(/Only Claude Code and Copilot currently consume MCP config/),
+    ).toBeInTheDocument();
+  });
+
+  it("does not warn when the selected runtime is copilot", () => {
+    renderTab({ runtimeDevice: makeRuntime({ provider: "copilot" }) });
+
+    expect(
+      screen.queryByText("This runtime ignores MCP config"),
+    ).not.toBeInTheDocument();
   });
 
   it("saves a parsed MCP config object", async () => {
