@@ -156,19 +156,41 @@ func (s *TaskService) captureTaskCompleted(ctx context.Context, task db.AgentTas
 //   - assignee must be agent or squad  (assignee guardrail)
 //   - no active tasks remain           (active-task gate)
 //
-// A no-op (zero rows updated) is the expected outcome when any condition is not
-// met — callers must not treat it as an error.
+// When the transition fires (the query returns a row), an issue:updated event
+// with status_changed=true is published so downstream listeners (notifications,
+// autopilot, activity feed) see the in_review status change. pgx.ErrNoRows is
+// the expected no-op outcome when any guardrail blocks the transition.
 func (s *TaskService) maybeAdvanceIssueToInReviewOnCompletion(ctx context.Context, task db.AgentTaskQueue) {
 	if !task.IssueID.Valid {
 		return
 	}
-	if err := s.Queries.AdvanceIssueToInReviewOnTaskCompletion(ctx, task.IssueID); err != nil {
+	issue, err := s.Queries.AdvanceIssueToInReviewOnTaskCompletion(ctx, task.IssueID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Expected no-op: one or more guardrails blocked the transition.
+			return
+		}
 		slog.Warn("advance issue to in_review on task completion: query failed",
 			"task_id", util.UUIDToString(task.ID),
 			"issue_id", util.UUIDToString(task.IssueID),
 			"error", err,
 		)
+		return
 	}
+	// Transition fired — publish issue:updated with status_changed so all
+	// downstream listeners (notifications, autopilot, activity) react.
+	prefix := s.getIssuePrefix(issue.WorkspaceID)
+	s.Bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
+		ActorType:   "system",
+		ActorID:     "",
+		Payload: map[string]any{
+			"issue":          issueToMap(issue, prefix),
+			"status_changed": true,
+			"prev_status":    "in_progress",
+		},
+	})
 }
 
 func (s *TaskService) captureTaskFailed(ctx context.Context, task db.AgentTaskQueue) {

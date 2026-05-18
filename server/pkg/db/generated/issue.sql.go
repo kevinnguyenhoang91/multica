@@ -918,7 +918,7 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 	return i, err
 }
 
-const advanceIssueToInReviewOnTaskCompletion = `-- name: AdvanceIssueToInReviewOnTaskCompletion :exec
+const advanceIssueToInReviewOnTaskCompletion = `-- name: AdvanceIssueToInReviewOnTaskCompletion :one
 UPDATE issue
 SET status = 'in_review', updated_at = now()
 WHERE id = $1
@@ -929,6 +929,7 @@ WHERE id = $1
     WHERE issue_id = $1
       AND status IN ('queued', 'dispatched', 'running')
   )
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at
 `
 
 // AdvanceIssueToInReviewOnTaskCompletion advances an issue from in_progress to
@@ -937,8 +938,36 @@ WHERE id = $1
 //   - assignee must be agent or squad (assignee guardrail)
 //   - no queued/dispatched/running tasks remain (active-task gate)
 //
-// Zero rows updated is a valid no-op when any condition fails.
-func (q *Queries) AdvanceIssueToInReviewOnTaskCompletion(ctx context.Context, issueID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, advanceIssueToInReviewOnTaskCompletion, issueID)
-	return err
+// Returns the updated Issue when the transition fires. Returns pgx.ErrNoRows
+// when any guardrail blocks the transition — callers use this signal to decide
+// whether to publish an issue:updated status-change event.
+func (q *Queries) AdvanceIssueToInReviewOnTaskCompletion(ctx context.Context, issueID pgtype.UUID) (Issue, error) {
+	row := q.db.QueryRow(ctx, advanceIssueToInReviewOnTaskCompletion, issueID)
+	var i Issue
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.AssigneeType,
+		&i.AssigneeID,
+		&i.CreatorType,
+		&i.CreatorID,
+		&i.ParentIssueID,
+		&i.AcceptanceCriteria,
+		&i.ContextRefs,
+		&i.Position,
+		&i.DueDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Number,
+		&i.ProjectID,
+		&i.OriginType,
+		&i.OriginID,
+		&i.FirstExecutedAt,
+	)
+	return i, err
 }
+
