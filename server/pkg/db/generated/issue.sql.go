@@ -917,3 +917,28 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 	)
 	return i, err
 }
+
+const advanceIssueToInReviewOnTaskCompletion = `-- name: AdvanceIssueToInReviewOnTaskCompletion :exec
+UPDATE issue
+SET status = 'in_review', updated_at = now()
+WHERE id = $1
+  AND status = 'in_progress'
+  AND assignee_type IN ('agent', 'squad')
+  AND NOT EXISTS (
+    SELECT 1 FROM agent_task_queue
+    WHERE issue_id = $1
+      AND status IN ('queued', 'dispatched', 'running')
+  )
+`
+
+// AdvanceIssueToInReviewOnTaskCompletion advances an issue from in_progress to
+// in_review atomically when all SQL guardrails pass:
+//   - issue must be in_progress (terminal-state protection)
+//   - assignee must be agent or squad (assignee guardrail)
+//   - no queued/dispatched/running tasks remain (active-task gate)
+//
+// Zero rows updated is a valid no-op when any condition fails.
+func (q *Queries) AdvanceIssueToInReviewOnTaskCompletion(ctx context.Context, issueID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, advanceIssueToInReviewOnTaskCompletion, issueID)
+	return err
+}

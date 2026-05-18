@@ -149,6 +149,25 @@ WHERE workspace_id = $1
   AND parent_issue_id IS NOT NULL
 GROUP BY parent_issue_id;
 
+-- name: AdvanceIssueToInReviewOnTaskCompletion :exec
+-- Atomically advances an issue from in_progress to in_review when a task
+-- completes. All three guardrails are enforced in a single UPDATE:
+--   • issue must be in_progress       (terminal-state protection)
+--   • assignee must be agent or squad  (assignee guardrail)
+--   • no active tasks remain           (active-task gate: queued/dispatched/running)
+-- A no-op (zero rows updated) is the correct outcome for any issue that
+-- does not satisfy all three conditions — callers need not check the count.
+UPDATE issue
+SET status = 'in_review', updated_at = now()
+WHERE id = $1
+  AND status = 'in_progress'
+  AND assignee_type IN ('agent', 'squad')
+  AND NOT EXISTS (
+    SELECT 1 FROM agent_task_queue
+    WHERE issue_id = $1
+      AND status IN ('queued', 'dispatched', 'running')
+  );
+
 -- SearchIssues: moved to handler (dynamic SQL for multi-word search support).
 
 -- name: MarkIssueFirstExecuted :one

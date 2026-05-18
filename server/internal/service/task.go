@@ -149,6 +149,28 @@ func (s *TaskService) captureTaskCompleted(ctx context.Context, task db.AgentTas
 	))
 }
 
+// maybeAdvanceIssueToInReviewOnCompletion advances an issue from in_progress
+// to in_review when a task completes. The transition is enforced atomically
+// inside a single SQL UPDATE that checks all three guardrails:
+//   - issue must be in_progress       (terminal-state protection)
+//   - assignee must be agent or squad  (assignee guardrail)
+//   - no active tasks remain           (active-task gate)
+//
+// A no-op (zero rows updated) is the expected outcome when any condition is not
+// met — callers must not treat it as an error.
+func (s *TaskService) maybeAdvanceIssueToInReviewOnCompletion(ctx context.Context, task db.AgentTaskQueue) {
+	if !task.IssueID.Valid {
+		return
+	}
+	if err := s.Queries.AdvanceIssueToInReviewOnTaskCompletion(ctx, task.IssueID); err != nil {
+		slog.Warn("advance issue to in_review on task completion: query failed",
+			"task_id", util.UUIDToString(task.ID),
+			"issue_id", util.UUIDToString(task.IssueID),
+			"error", err,
+		)
+	}
+}
+
 func (s *TaskService) captureTaskFailed(ctx context.Context, task db.AgentTaskQueue) {
 	failureReason := taskFailureReason(task)
 	s.captureTaskEvent(ctx, analytics.AgentTaskFailed(
@@ -1000,6 +1022,7 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 	s.captureTaskCompleted(ctx, task)
+	s.maybeAdvanceIssueToInReviewOnCompletion(ctx, task)
 
 	// Invariant: every completed issue task must have at least one agent
 	// comment on the issue, so the user always sees something when a run
