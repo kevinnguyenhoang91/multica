@@ -284,12 +284,12 @@
       "save_failed_toast": "Failed to save custom arguments"
     },
     "mcp": {
-      "intro": "Per-agent MCP configuration passed to Claude Code when a task starts.",
+      "intro": "Per-agent MCP configuration passed to Claude Code and Copilot when a task starts.",
       "empty_hint": "Leave the editor empty to clear this agent's MCP config.",
       "clear": "Clear",
       "unsupported_title": "This runtime ignores MCP config",
-      "unsupported_description": "{{provider}} accepts the saved field but does not read it. Only Claude Code currently consumes MCP config.",
-      "no_runtime_description": "Select a Claude Code runtime before relying on MCP servers for this agent.",
+      "unsupported_description": "{{provider}} accepts the saved field but does not read it. Only Claude Code and Copilot currently consume MCP config.",
+      "no_runtime_description": "Select a Claude Code or Copilot runtime before relying on MCP servers for this agent.",
       "editor_label": "MCP config JSON",
       "editor_aria": "MCP config JSON",
       "placeholder": "{\n  \"mcpServers\": {\n    \"github\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"]\n    }\n  }\n}",
