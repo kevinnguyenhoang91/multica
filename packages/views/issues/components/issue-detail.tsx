@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Link as LinkIcon,
   MoreHorizontal,
   PanelRight,
   Pin,
@@ -368,6 +369,62 @@ function flattenGroups(
   return out;
 }
 
+type CommentLinkBuckets = {
+  pullRequests: string[];
+  otherLinks: string[];
+};
+
+const COMMENT_URL_REGEX = /https?:\/\/[^\s<>"'`)\]}]+/gi;
+
+function isPullRequestUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    return /\/pull\/\d+/.test(pathname) || /\/pulls\/\d+/.test(pathname) || /\/-\/merge_requests\/\d+/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeUrlKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "") || "/";
+    return `${parsed.protocol}//${parsed.host.toLowerCase()}${normalizedPath}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function displayUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.host}${normalizedPath}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function extractCommentLinks(entries: TimelineEntry[]): CommentLinkBuckets {
+  const pullRequests: string[] = [];
+  const otherLinks: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (entry.type !== "comment" || !entry.content) continue;
+    for (const match of entry.content.matchAll(COMMENT_URL_REGEX)) {
+      const url = match[0]?.replace(/[.,!?;:]+$/g, "");
+      if (!url) continue;
+      const key = normalizeUrlKey(url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (isPullRequestUrl(url)) pullRequests.push(url);
+      else otherLinks.push(url);
+    }
+  }
+  return { pullRequests, otherLinks };
+}
+
 function TimelineSkeleton() {
   return (
     <div className="mt-4 flex flex-col gap-3">
@@ -650,6 +707,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [parentIssueOpen, setParentIssueOpen] = useState(true);
+  const [commentLinksOpen, setCommentLinksOpen] = useState(true);
   const [pullRequestsOpen, setPullRequestsOpen] = useState(true);
   const [tokenUsageOpen, setTokenUsageOpen] = useState(true);
   const githubSettings = useGitHubSettings();
@@ -895,6 +953,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     () => flattenGroups(timelineView.groups, expandedResolved),
     [timelineView.groups, expandedResolved],
   );
+  const commentLinks = useMemo(() => extractCommentLinks(timeline), [timeline]);
 
   // ID of the trailing activity block — the only one expanded by default.
   const lastActivityGroupId = useMemo(() => {
@@ -1384,6 +1443,72 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           {pullRequestsOpen && <div className="pl-2"><PullRequestList issueId={id} /></div>}
         </div>
       )}
+      {/* Comment links */}
+      <div>
+        <button
+          className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${commentLinksOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
+          onClick={() => setCommentLinksOpen(!commentLinksOpen)}
+        >
+          {t(($) => $.detail.section_comment_links)}
+          <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${commentLinksOpen ? "rotate-90" : ""}`} />
+        </button>
+        {commentLinksOpen && (
+          <div className="pl-2 space-y-2">
+            {commentLinks.pullRequests.length === 0 && commentLinks.otherLinks.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2">{t(($) => $.detail.comment_links_empty)}</p>
+            ) : (
+              <>
+                {commentLinks.pullRequests.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_links_pull_requests)}</p>
+                    {commentLinks.pullRequests.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
+                      >
+                        <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate group-hover:text-foreground">{displayUrl(url)}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {commentLinks.otherLinks.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_links_external)}</p>
+                    {commentLinks.otherLinks.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
+                      >
+                        <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate group-hover:text-foreground">{displayUrl(url)}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Pull requests */}
+      <div>
+        <button
+          className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${pullRequestsOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
+          onClick={() => setPullRequestsOpen(!pullRequestsOpen)}
+        >
+          {t(($) => $.detail.section_pull_requests)}
+          <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${pullRequestsOpen ? "rotate-90" : ""}`} />
+        </button>
+        {pullRequestsOpen && <div className="pl-2"><PullRequestList issueId={id} /></div>}
+      </div>
 
       {/* Details */}
       <div>
