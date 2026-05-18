@@ -104,7 +104,7 @@ Arguments are passed as-is, not through a shell (no injection risk), but whether
 }
 ```
 
-Only Claude Code currently consumes this field. Other runtimes accept the saved config but ignore it at execution time, so use a Claude Code runtime when the agent depends on MCP servers. See [AI coding tools comparison → MCP configuration](/providers#mcp-configuration-only-claude-code-actually-reads-it).
+Claude Code and Copilot currently consume this field. Other runtimes accept the saved config but ignore it at execution time, so use a Claude Code or Copilot runtime when the agent depends on MCP servers. Note that Copilot uses additive MCP loading (`--additional-mcp-config`), so default Copilot MCP sources may also be active. See [AI coding tools comparison → MCP configuration](/providers#mcp-configuration-claude-code-and-copilot-read-it).
 
 ## Visibility
 

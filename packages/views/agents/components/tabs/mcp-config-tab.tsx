@@ -65,9 +65,9 @@ function parseMcpConfigInput(input: string): ParsedMcpConfig {
   }
 }
 
-function isClaudeRuntime(runtimeDevice?: RuntimeDevice) {
+function isMcpSupportedRuntime(runtimeDevice?: RuntimeDevice) {
   const provider = runtimeDevice?.provider.toLowerCase();
-  return provider === "claude" || provider === "claude-code";
+  return provider === "claude" || provider === "claude-code" || provider === "copilot";
 }
 
 export function McpConfigTab({
@@ -86,7 +86,7 @@ export function McpConfigTab({
   const { t } = useT("agents");
   const [value, setValue] = useState(formatMcpConfig(agent.mcp_config));
   const [saving, setSaving] = useState(false);
-  const runtimeSupportsMcp = isClaudeRuntime(runtimeDevice);
+  const runtimeSupportsMcp = isMcpSupportedRuntime(runtimeDevice);
 
   useEffect(() => {
     setValue(formatMcpConfig(agent.mcp_config));
