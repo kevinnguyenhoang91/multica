@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -834,5 +835,122 @@ func TestBuildCopilotArgsBlocksResumeAndACP(t *testing.T) {
 		if a == "--yolo" {
 			t.Fatalf("blocked --yolo should have been filtered: %v", args)
 		}
+	}
+}
+
+func TestBuildCopilotArgsBlocksAdditionalMCPConfig(t *testing.T) {
+	t.Parallel()
+
+	args := buildCopilotArgs("hi", ExecOptions{
+		CustomArgs: []string{"--additional-mcp-config", "/tmp/evil.json", "--model", "gpt-5"},
+	}, slog.Default())
+
+	for _, a := range args {
+		if a == "--additional-mcp-config" {
+			t.Fatalf("blocked --additional-mcp-config should have been filtered: %v", args)
+		}
+		if a == "/tmp/evil.json" {
+			t.Fatalf("blocked --additional-mcp-config value should have been filtered: %v", args)
+		}
+	}
+
+	foundModel := false
+	for i, a := range args {
+		if a == "--model" && i+1 < len(args) && args[i+1] == "gpt-5" {
+			foundModel = true
+		}
+	}
+	if !foundModel {
+		t.Fatalf("expected --model gpt-5 to pass through, got %v", args)
+	}
+}
+
+func TestCopilotExecutePassesAndCleansAdditionalMCPConfig(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fixture is POSIX-only")
+	}
+
+	fakeDir := t.TempDir()
+	fakePath := filepath.Join(fakeDir, "copilot")
+	capturedPath := filepath.Join(fakeDir, "captured-mcp.json")
+	usedPathFile := filepath.Join(fakeDir, "used-mcp-path.txt")
+	script := "#!/bin/sh\n" +
+		"script_dir=$(dirname \"$0\")\n" +
+		"capture_path=\"$script_dir/captured-mcp.json\"\n" +
+		"used_path_file=\"$script_dir/used-mcp-path.txt\"\n" +
+		"mcp=\"\"\n" +
+		"while [ $# -gt 0 ]; do\n" +
+		"  if [ \"$1\" = \"--additional-mcp-config\" ]; then\n" +
+		"    shift\n" +
+		"    mcp=\"$1\"\n" +
+		"    break\n" +
+		"  fi\n" +
+		"  shift\n" +
+		"done\n" +
+		"if [ -z \"$mcp\" ]; then\n" +
+		"  echo \"missing --additional-mcp-config\" >&2\n" +
+		"  exit 2\n" +
+		"fi\n" +
+		"if [ ! -f \"$mcp\" ]; then\n" +
+		"  echo \"mcp file not found: $mcp\" >&2\n" +
+		"  exit 3\n" +
+		"fi\n" +
+		"cat \"$mcp\" > \"$capture_path\"\n" +
+		"printf '%s' \"$mcp\" > \"$used_path_file\"\n" +
+		"printf '%s\\n' '{\"type\":\"result\",\"sessionId\":\"sess-ok\",\"exitCode\":0}'\n" +
+		"exit 0\n"
+	writeTestExecutable(t, fakePath, []byte(script))
+
+	backend, err := New("copilot", Config{ExecutablePath: fakePath, Logger: slog.Default()})
+	if err != nil {
+		t.Fatalf("new copilot backend: %v", err)
+	}
+
+	raw := json.RawMessage(`{"mcpServers":{"test":{"command":"echo","args":["hello"]}}}`)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := backend.Execute(ctx, "prompt-ignored", ExecOptions{
+		Timeout:   5 * time.Second,
+		McpConfig: raw,
+	})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	go func() {
+		for range session.Messages {
+		}
+	}()
+
+	select {
+	case result, ok := <-session.Result:
+		if !ok {
+			t.Fatal("result channel closed without a value")
+		}
+		if result.Status != "completed" {
+			t.Fatalf("expected completed status, got %q (error=%q)", result.Status, result.Error)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for result")
+	}
+
+	captured, err := os.ReadFile(capturedPath)
+	if err != nil {
+		t.Fatalf("read captured mcp config: %v", err)
+	}
+	if string(captured) != string(raw) {
+		t.Fatalf("expected captured mcp config %s, got %s", raw, captured)
+	}
+
+	mcpPathRaw, err := os.ReadFile(usedPathFile)
+	if err != nil {
+		t.Fatalf("read used mcp path: %v", err)
+	}
+	mcpPath := strings.TrimSpace(string(mcpPathRaw))
+	if mcpPath == "" {
+		t.Fatal("expected non-empty mcp path")
+	}
+	if _, err := os.Stat(mcpPath); !os.IsNotExist(err) {
+		t.Fatalf("expected mcp temp file to be removed, stat err=%v", err)
 	}
 }
