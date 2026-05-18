@@ -219,11 +219,7 @@ func (b *copilotBackend) Execute(ctx context.Context, prompt string, opts ExecOp
 		}
 		mcpConfigPath = path
 		mcpFileCleanup = func() { os.Remove(mcpConfigPath) }
-		// Copilot --additional-mcp-config accepts either inline JSON or a
-		// file path prefixed with "@". We must use the "@" prefix so Copilot
-		// reads the file rather than treating the path as inline JSON (which
-		// would fail parsing at the leading "/" or drive letter).
-		args = append(args, "--additional-mcp-config", "@"+mcpConfigPath)
+		args = append(args, "--additional-mcp-config", mcpConfigPath)
 	}
 	defer func() {
 		if mcpFileCleanup != nil {
