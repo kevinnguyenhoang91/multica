@@ -6,6 +6,8 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { WSClient } from "../api/ws-client";
+import { issueKeys } from "../issues/queries";
+import { projectKeys } from "../projects/queries";
 import { useRealtimeSync, type RealtimeSyncStores } from "./use-realtime-sync";
 
 vi.mock("../platform/workspace-storage", () => ({
@@ -18,12 +20,20 @@ vi.mock("../paths", () => ({
   resolvePostAuthDestination: () => "/",
 }));
 
-function createMockWs(): WSClient {
+function createMockWs(): WSClient & {
+  on: ReturnType<typeof vi.fn>;
+  onAny: ReturnType<typeof vi.fn>;
+  onReconnect: ReturnType<typeof vi.fn>;
+} {
   return {
     on: vi.fn(() => () => {}),
     onAny: vi.fn(() => () => {}),
     onReconnect: vi.fn(() => () => {}),
-  } as unknown as WSClient;
+  } as WSClient & {
+    on: ReturnType<typeof vi.fn>;
+    onAny: ReturnType<typeof vi.fn>;
+    onReconnect: ReturnType<typeof vi.fn>;
+  };
 }
 
 function createStores(): RealtimeSyncStores {
@@ -118,5 +128,47 @@ describe("useRealtimeSync — ws instance change", () => {
     rerender({ ws: ws1 });
 
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("invalidates issue detail timeline/reactions/subscribers on reconnect", async () => {
+    const ws = createMockWs();
+    renderHook(() => useRealtimeSync(ws, stores), {
+      wrapper: createWrapper(qc),
+    });
+
+    invalidateSpy.mockClear();
+    const onReconnect = ws.onReconnect.mock.calls[0]?.[0] as
+      | (() => Promise<void>)
+      | undefined;
+    expect(onReconnect).toBeDefined();
+
+    await onReconnect?.();
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["issues"] });
+  });
+
+  it("refreshes projects queries for project_resource events", () => {
+    vi.useFakeTimers();
+    const ws = createMockWs();
+    renderHook(() => useRealtimeSync(ws, stores), {
+      wrapper: createWrapper(qc),
+    });
+
+    invalidateSpy.mockClear();
+    const onAny = ws.onAny.mock.calls[0]?.[0] as
+      | ((msg: { type: string }) => void)
+      | undefined;
+    expect(onAny).toBeDefined();
+
+    onAny?.({ type: "project_resource:created" });
+    vi.advanceTimersByTime(100);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: projectKeys.all("ws-1"),
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: issueKeys.all("ws-1"),
+    });
+    vi.useRealTimers();
   });
 });
