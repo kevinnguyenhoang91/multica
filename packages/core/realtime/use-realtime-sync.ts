@@ -947,13 +947,15 @@ export function useRealtimeSync(
 
   // New WSClient instance (workspace switch) -> invalidate workspace-scoped
   // queries to recover events missed while the previous instance was torn down.
-  // Skips the initial assignment to avoid a redundant refetch on first mount.
+  // Also flushes once on first connect to close the initial bootstrap gap
+  // between HTTP hydration and websocket authentication.
   const wsInstanceRef = useRef<WSClient | null>(null);
   useEffect(() => {
     if (!ws) return;
     if (wsInstanceRef.current === null) {
-      // First non-null instance — store and skip invalidation.
+      logger.info("first WSClient instance detected, invalidating workspace queries");
       wsInstanceRef.current = ws;
+      invalidateWorkspaceScopedQueries(qc);
       return;
     }
     if (wsInstanceRef.current === ws) return;
