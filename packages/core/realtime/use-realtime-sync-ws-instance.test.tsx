@@ -66,16 +66,21 @@ describe("useRealtimeSync — ws instance change", () => {
     invalidateSpy = vi.spyOn(qc, "invalidateQueries");
   });
 
-  it("invalidates workspace-scoped queries on first non-null ws instance", () => {
+  it("skips invalidation on first non-null ws instance", () => {
     const ws = createMockWs();
     renderHook(() => useRealtimeSync(ws, stores), {
       wrapper: createWrapper(qc),
     });
 
-    // First connect now flushes workspace-scoped queries to recover the
-    // bootstrap T1->T2 event gap before websocket auth completed.
-    expect(invalidateSpy).toHaveBeenCalledTimes(12);
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["issues"] });
+    // The main effect calls invalidateQueries for its own setup, but the
+    // ws-instance-change effect should NOT have fired invalidation.
+    // The only invalidateQueries calls should come from the main effect's
+    // event handlers, not from the instance-change effect.
+    // We verify by checking that no call was made with workspaceKeys.list()
+    // pattern from the instance-change path (it logs a specific message).
+    // Simpler: count calls — first mount with a ws should not trigger the
+    // workspace-scoped bulk invalidation.
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it("does not invalidate when ws goes from instance to null", () => {
