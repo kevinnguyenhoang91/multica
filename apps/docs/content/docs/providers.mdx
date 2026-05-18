@@ -29,7 +29,7 @@ For guidance on picking a tool when creating an agent, see [Creating and configu
 
 ### Claude Code
 
-From Anthropic. **First choice for new users** — the most complete feature set: session resumption actually works, it's the **only one of the 11 that truly reads MCP configuration**, and it supports fine-tuning flags like `--max-turns` and `--append-system-prompt`. Requires an Anthropic API key.
+From Anthropic. **First choice for new users** — the most complete feature set: session resumption actually works, it reads MCP configuration natively via `--mcp-config` with strict-replacement semantics, and it supports fine-tuning flags like `--max-turns` and `--append-system-prompt`. Requires an Anthropic API key.
 
 ### Codex
 
@@ -37,7 +37,7 @@ From OpenAI. Uses JSON-RPC 2.0, has stronger statefulness, and a finer-grained a
 
 ### Copilot
 
-From GitHub. Model routing goes through your GitHub account entitlement — the tool doesn't select a model itself; GitHub decides which model you get. Placing skills in `.github/skills/` is GitHub CLI's native discovery mechanism.
+From GitHub. Model routing goes through your GitHub account entitlement — the tool doesn't select a model itself; GitHub decides which model you get. Placing skills in `.github/skills/` is GitHub CLI's native discovery mechanism. **MCP configuration is supported** via `--additional-mcp-config` (additive; default Copilot MCP sources are still loaded alongside).
 
 ### Cursor
 
@@ -83,12 +83,12 @@ The session resumption mechanism is covered in [Tasks](/tasks#can-a-task-continu
 
 **For your decision**: if your workflow needs agents to preserve context across tasks (failure retries, manual reruns, conversational iteration), pick only from the ✅ row.
 
-## MCP configuration: only Claude Code actually reads it
+## MCP configuration: Claude Code and Copilot read it
 
-**Of the 11 tools, only Claude Code actually consumes `mcp_config`**. The other 10 accept the field but **completely ignore it** — no error, no warning, the config just has no effect.
+**Of the 11 tools, only Claude Code and Copilot consume `mcp_config`**. The other 9 accept the field but **completely ignore it** — no error, no warning, the config just has no effect.
 
 <Callout type="warning">
-If you set `mcp_config` in an agent configuration but pick a tool other than Claude Code, your MCP servers have **no effect** on that agent. MCP integration currently covers Claude Code only.
+If you set `mcp_config` in an agent configuration but pick a tool other than Claude Code or Copilot, your MCP servers have **no effect** on that agent. MCP integration currently covers Claude Code and Copilot only.
 </Callout>
 
 ## Where skill files go
