@@ -155,6 +155,50 @@ func (s *TaskService) captureTaskCompleted(ctx context.Context, task db.AgentTas
 	))
 }
 
+// maybeAdvanceIssueToInReviewOnCompletion advances an issue from in_progress
+// to in_review when a task completes. The transition is enforced atomically
+// inside a single SQL UPDATE that checks all three guardrails:
+//   - issue must be in_progress       (terminal-state protection)
+//   - assignee must be agent or squad  (assignee guardrail)
+//   - no active tasks remain           (active-task gate)
+//
+// When the transition fires (the query returns a row), an issue:updated event
+// with status_changed=true is published so downstream listeners (notifications,
+// autopilot, activity feed) see the in_review status change. pgx.ErrNoRows is
+// the expected no-op outcome when any guardrail blocks the transition.
+func (s *TaskService) maybeAdvanceIssueToInReviewOnCompletion(ctx context.Context, task db.AgentTaskQueue) {
+	if !task.IssueID.Valid {
+		return
+	}
+	issue, err := s.Queries.AdvanceIssueToInReviewOnTaskCompletion(ctx, task.IssueID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Expected no-op: one or more guardrails blocked the transition.
+			return
+		}
+		slog.Warn("advance issue to in_review on task completion: query failed",
+			"task_id", util.UUIDToString(task.ID),
+			"issue_id", util.UUIDToString(task.IssueID),
+			"error", err,
+		)
+		return
+	}
+	// Transition fired — publish issue:updated with status_changed so all
+	// downstream listeners (notifications, autopilot, activity) react.
+	prefix := s.getIssuePrefix(issue.WorkspaceID)
+	s.Bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
+		ActorType:   "system",
+		ActorID:     "",
+		Payload: map[string]any{
+			"issue":          issueToMap(issue, prefix),
+			"status_changed": true,
+			"prev_status":    "in_progress",
+		},
+	})
+}
+
 func (s *TaskService) captureTaskFailed(ctx context.Context, task db.AgentTaskQueue) {
 	failureReason := taskFailureReason(task)
 	s.captureTaskEvent(ctx, analytics.AgentTaskFailed(
@@ -1035,6 +1079,7 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 	s.captureTaskCompleted(ctx, task)
+	s.maybeAdvanceIssueToInReviewOnCompletion(ctx, task)
 
 	// Invariant: every completed issue task must have at least one agent
 	// comment on the issue, so the user always sees something when a run
