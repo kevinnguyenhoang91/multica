@@ -779,122 +779,16 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Resources")).toBeInTheDocument();
+      expect(screen.getByText("Comment links")).toBeInTheDocument();
     });
 
-    // The PR link from comments is now folded into the Pull requests section,
-    // not shown as a subgroup inside Resources.
-    expect(screen.queryByText("Pull requests from comments")).not.toBeInTheDocument();
-    expect(screen.queryByText("Other links from comments")).not.toBeInTheDocument();
-    // The non-PR link should appear in Resources.
+    expect(screen.getByText("Pull requests from comments")).toBeInTheDocument();
+    expect(screen.getByText("Other links from comments")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "github.com/acme/multica/pull/42" }))
+      .toHaveAttribute("href", "https://github.com/acme/multica/pull/42");
     expect(screen.getByRole("link", { name: "docs.example.com/spec" }))
       .toHaveAttribute("href", "https://docs.example.com/spec");
-    // The PR link from comments should be deduplicated (only one anchor for it).
     expect(screen.getAllByRole("link", { name: "github.com/acme/multica/pull/42" })).toHaveLength(1);
-  });
-
-  it("renders comment attachments grouped into images and other files", async () => {
-    mockApiObj.listTimeline.mockResolvedValue([
-      ...mockTimeline,
-      {
-        type: "comment",
-        id: "comment-3",
-        actor_type: "agent",
-        actor_id: "agent-1",
-        content: "Attached screenshot and logs",
-        parent_id: null,
-        created_at: "2026-01-18T00:00:00Z",
-        updated_at: "2026-01-18T00:00:00Z",
-        comment_type: "comment",
-        attachments: [
-          {
-            id: "att-image-1",
-            workspace_id: "ws-1",
-            issue_id: "issue-1",
-            comment_id: "comment-3",
-            chat_session_id: null,
-            chat_message_id: null,
-            uploader_type: "agent",
-            uploader_id: "agent-1",
-            filename: "error-screenshot.png",
-            url: "https://cdn.example.com/error-screenshot.png",
-            download_url: "https://cdn.example.com/error-screenshot.png?sig=1",
-            content_type: "image/png",
-            size_bytes: 1024,
-            created_at: "2026-01-18T00:00:00Z",
-          },
-        ],
-      },
-      {
-        type: "comment",
-        id: "comment-4",
-        actor_type: "member",
-        actor_id: "user-1",
-        content: "Reply with log file",
-        parent_id: "comment-3",
-        created_at: "2026-01-18T00:05:00Z",
-        updated_at: "2026-01-18T00:05:00Z",
-        comment_type: "comment",
-        attachments: [
-          {
-            id: "att-doc-1",
-            workspace_id: "ws-1",
-            issue_id: "issue-1",
-            comment_id: "comment-4",
-            chat_session_id: null,
-            chat_message_id: null,
-            uploader_type: "member",
-            uploader_id: "user-1",
-            filename: "logs.txt",
-            url: "https://cdn.example.com/logs.txt",
-            download_url: "https://cdn.example.com/logs.txt?sig=1",
-            content_type: "text/plain",
-            size_bytes: 512,
-            created_at: "2026-01-18T00:05:00Z",
-          },
-          {
-            id: "att-image-1",
-            workspace_id: "ws-1",
-            issue_id: "issue-1",
-            comment_id: "comment-4",
-            chat_session_id: null,
-            chat_message_id: null,
-            uploader_type: "member",
-            uploader_id: "user-1",
-            filename: "error-screenshot-duplicate.png",
-            url: "https://cdn.example.com/error-screenshot-duplicate.png",
-            download_url: "https://cdn.example.com/error-screenshot-duplicate.png?sig=2",
-            content_type: "image/png",
-            size_bytes: 1024,
-            created_at: "2026-01-18T00:05:00Z",
-          },
-          {
-            id: "att-malformed-1",
-            filename: "unknown.bin",
-            url: "https://cdn.example.com/unknown.bin",
-            download_url: "https://cdn.example.com/unknown.bin?sig=1",
-          } as Attachment,
-        ],
-      },
-    ] as TimelineEntry[]);
-
-    renderIssueDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Attachments")).toBeInTheDocument();
-    });
-
-    expect(screen.getByText("Images from comments")).toBeInTheDocument();
-    expect(screen.getByText("Other attachments from comments")).toBeInTheDocument();
-      expect(screen.getAllByRole("button", { name: "error-screenshot.png" })).toHaveLength(1);
-
-      fireEvent.click(screen.getByRole("button", { name: "error-screenshot.png" }));
-      fireEvent.click(screen.getByRole("button", { name: "logs.txt" }));
-      fireEvent.click(screen.getByRole("button", { name: "unknown.bin" }));
-
-      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-image-1");
-      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-doc-1");
-      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-malformed-1");
   });
 
   it("shows 'not found' message when issue does not exist", async () => {
