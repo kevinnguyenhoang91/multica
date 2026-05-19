@@ -133,7 +133,13 @@ export function AgentCreatePanel({
   const clearPrompt = useQuickCreateStore((s) => s.clearPrompt);
   const keepOpen = useQuickCreateStore((s) => s.keepOpen);
   const setKeepOpen = useQuickCreateStore((s) => s.setKeepOpen);
+  const persistedUseSandbox = useQuickCreateStore((s) => s.useSandbox);
+  const setPersistedUseSandbox = useQuickCreateStore((s) => s.setUseSandbox);
   const setLastMode = useCreateModeStore((s) => s.setLastMode);
+  const [useSandbox, setUseSandbox] = useState<boolean>(() => {
+    if (typeof data?.use_sandbox === "boolean") return data.use_sandbox;
+    return persistedUseSandbox;
+  });
 
   // Resolve a candidate actor against the currently-visible agents / squads.
   // Returns null when the candidate doesn't exist in this workspace right
@@ -280,6 +286,7 @@ export function AgentCreatePanel({
           : { squad_id: actor.id }),
         prompt: md,
         project_id: projectId ?? undefined,
+        use_sandbox: useSandbox,
       });
       setLastActor(actor.type, actor.id);
       setLastProjectId(projectId);
@@ -362,7 +369,10 @@ export function AgentCreatePanel({
     // channel that already carries agent_id / parent_issue_id. The manual
     // panel reads `data.project_id` on mount; this preserves the user's
     // selection across the mode flip without piping a third store through.
-    onSwitchMode?.(projectId ? { project_id: projectId } : null);
+    onSwitchMode?.({
+      ...(projectId ? { project_id: projectId } : {}),
+      use_sandbox: useSandbox,
+    });
   };
 
   return (
@@ -506,8 +516,21 @@ export function AgentCreatePanel({
                 size="sm"
                 checked={keepOpen}
                 onCheckedChange={setKeepOpen}
+                aria-label={t(($) => $.create_issue.create_another)}
               />
               {t(($) => $.create_issue.create_another)}
+            </label>
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <Switch
+                size="sm"
+                checked={useSandbox}
+                onCheckedChange={(v) => {
+                  setUseSandbox(v);
+                  setPersistedUseSandbox(v);
+                }}
+                aria-label={t(($) => $.create_issue.sandbox_toggle)}
+              />
+              {t(($) => $.create_issue.sandbox_toggle)}
             </label>
             <Button
               size="sm"

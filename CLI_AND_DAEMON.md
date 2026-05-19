@@ -223,6 +223,15 @@ Agent-specific overrides:
 
 `MULTICA_CLAUDE_ARGS` and `MULTICA_CODEX_ARGS` are parsed with POSIX shellword quoting, so values such as `--model "gpt-5.1 codex" --sandbox read-only` are split like a shell command line. Agent arguments are applied in this order: hardcoded Multica defaults, daemon-wide env defaults, then per-agent `custom_args` from the task.
 
+### Quick-create sandbox toggle behavior
+
+The Create Issue agent-mode dialog exposes an **Enable sandboxing** switch that sends `use_sandbox` with quick-create tasks.
+
+- `use_sandbox=true` (default): daemon-managed sandbox policy remains enabled.
+- `use_sandbox=false`: Codex tasks for that quick-create run with `danger-full-access` (full host access, including network).
+
+Use `use_sandbox=false` only when you explicitly need unrestricted execution for that task.
+
 ### Self-Hosted Server
 
 When connecting to a self-hosted Multica instance, the easiest approach is:
