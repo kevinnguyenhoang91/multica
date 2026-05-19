@@ -1391,6 +1391,11 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			hasQuickCreate = true
 			resp.QuickCreatePrompt = qc.Prompt
 			resp.WorkspaceID = qc.WorkspaceID
+			useSandbox := true
+			if qc.UseSandbox != nil {
+				useSandbox = *qc.UseSandbox
+			}
+			resp.UseSandbox = &useSandbox
 
 			// When the user picked a project in the modal, surface its title
 			// and resources to the daemon so the agent has the same context
