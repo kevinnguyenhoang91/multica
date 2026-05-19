@@ -515,6 +515,7 @@ export class ApiClient {
     squad_id?: string;
     prompt: string;
     project_id?: string | null;
+    use_sandbox?: boolean;
   }): Promise<{ task_id: string }> {
     return this.fetch("/api/issues/quick-create", {
       method: "POST",
