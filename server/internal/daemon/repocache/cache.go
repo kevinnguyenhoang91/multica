@@ -29,12 +29,11 @@ import (
 // directory owner.
 //
 // Any safe.bareRepository setting in the inherited env is filtered out:
-// that setting is injected by the multica CLI/daemon to prevent agents from
-// accidentally treating non-bare repos as bare, but it also prevents the
-// repo cache from running commands like `git -C <bare> config ...` because
-// the repo was discovered implicitly rather than via --git-dir / GIT_DIR.
-// The daemon's own bare-cache operations are trusted; no extra restriction
-// is needed here.
+// that setting is injected by the multica CLI/daemon to harden normal agent
+// shells, but the repocache layer operates only on daemon-owned bare repos.
+// Most calls now use --git-dir explicitly; stripping this inherited setting
+// prevents ambient policy from breaking any implicit-discovery call paths and
+// keeps repocache behavior independent from caller shell configuration.
 func gitEnv() []string {
 	base := os.Environ()
 
