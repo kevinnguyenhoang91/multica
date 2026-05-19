@@ -61,8 +61,8 @@ function useSidebar() {
   return context
 }
 
-function useSidebarSafe() {
-  return React.use(SidebarContext)
+function useOptionalSidebar() {
+  return React.useContext(SidebarContext)
 }
 
 function SidebarProvider({
@@ -798,6 +798,7 @@ export {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
+  useOptionalSidebar,
   useSidebar,
   useSidebarSafe,
 }
