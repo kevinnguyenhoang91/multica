@@ -564,9 +564,7 @@ type QuickCreateContext struct {
 	WorkspaceID string `json:"workspace_id"`
 	ProjectID   string `json:"project_id,omitempty"`
 	SquadID     string `json:"squad_id,omitempty"`
-	// New tasks always set UseSandbox; the pointer preserves compatibility with
-	// older queued payloads that may omit the field.
-	UseSandbox *bool `json:"use_sandbox,omitempty"`
+	UseSandbox  *bool  `json:"use_sandbox,omitempty"`
 }
 
 // QuickCreateContextType marks a task as a quick-create job.
@@ -611,8 +609,6 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	if squadID.Valid {
 		payload.SquadID = util.UUIDToString(squadID)
 	}
-	// UseSandbox is always non-nil for tasks created via this enqueue path.
-	// Nil only appears on legacy tasks created before use_sandbox existed.
 	payload.UseSandbox = &useSandbox
 	contextJSON, err := json.Marshal(payload)
 	if err != nil {
