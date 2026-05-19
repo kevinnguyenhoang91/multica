@@ -13,6 +13,26 @@ func testLogger() *slog.Logger {
 	return slog.Default()
 }
 
+// bareGitCmd creates a git command for a bare repository.
+// It uses gitEnv() as the command environment so that safe.bareRepository=explicit
+// (injected by multica repo checkout) does not prevent bare-repo discovery via -C.
+func bareGitCmd(barePath string, args ...string) *exec.Cmd {
+	full := append([]string{"-C", barePath}, args...)
+	cmd := exec.Command("git", full...)
+	cmd.Env = gitEnv()
+	return cmd
+}
+
+// runBareGit runs a git command on a bare repository and returns any error.
+func runBareGit(barePath string, args ...string) error {
+	return bareGitCmd(barePath, args...).Run()
+}
+
+// outputBareGit runs a git command on a bare repository and returns its stdout.
+func outputBareGit(barePath string, args ...string) ([]byte, error) {
+	return bareGitCmd(barePath, args...).Output()
+}
+
 func TestGitEnv(t *testing.T) {
 	t.Parallel()
 	env := gitEnv()
@@ -345,7 +365,7 @@ func TestSyncKeepsDistinctCachesForSegmentBoundaryColliders(t *testing.T) {
 // the key is missing or the command errors.
 func gitConfigGet(t *testing.T, repoPath, key string) string {
 	t.Helper()
-	out, err := exec.Command("git", "-C", repoPath, "config", "--get", key).Output()
+	out, err := outputBareGit(repoPath, "config", "--get", key)
 	if err != nil {
 		t.Fatalf("git config --get %s in %s: %v", key, repoPath, err)
 	}
@@ -362,7 +382,7 @@ func cachedRepoHasFile(t *testing.T, barePath, filename string) bool {
 	if ref == "" {
 		return false
 	}
-	out, err := exec.Command("git", "-C", barePath, "ls-tree", "-r", "--name-only", ref).Output()
+	out, err := outputBareGit(barePath, "ls-tree", "-r", "--name-only", ref)
 	if err != nil {
 		t.Fatalf("git ls-tree %s in %s: %v", ref, barePath, err)
 	}
@@ -442,11 +462,11 @@ func TestWorktreeFromCache(t *testing.T) {
 
 	// Create a worktree from the bare cache — this is the actual use case.
 	worktreeDir := filepath.Join(t.TempDir(), "work")
-	cmd := exec.Command("git", "-C", barePath, "worktree", "add", "-b", "test-branch", worktreeDir, "HEAD")
+	cmd := bareGitCmd(barePath, "worktree", "add", "-b", "test-branch", worktreeDir, "HEAD")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("worktree add failed: %s: %v", out, err)
 	}
-	defer exec.Command("git", "-C", barePath, "worktree", "remove", "--force", worktreeDir).Run()
+	defer runBareGit(barePath, "worktree", "remove", "--force", worktreeDir) //nolint:errcheck
 
 	// Verify worktree exists and is on the right branch.
 	cmd = exec.Command("git", "-C", worktreeDir, "branch", "--show-current")
@@ -706,7 +726,7 @@ func gitRefCommit(t *testing.T, repoPath, ref string) string {
 	if ref == "" {
 		t.Fatalf("empty ref in %s", repoPath)
 	}
-	cmd := exec.Command("git", "-C", repoPath, "rev-parse", ref)
+	cmd := bareGitCmd(repoPath, "rev-parse", ref)
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("git rev-parse %s failed in %s: %v", ref, repoPath, err)
@@ -732,7 +752,7 @@ func runGitAuthored(t *testing.T, repoPath string, args ...string) {
 	t.Helper()
 	full := append([]string{"-C", repoPath}, args...)
 	cmd := exec.Command("git", full...)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(gitEnv(),
 		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@test.com",
 		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@test.com",
 	)
@@ -853,7 +873,7 @@ func TestEnsureRemoteTrackingLayoutMigratesLegacyCache(t *testing.T) {
 		t.Fatalf("set legacy refspec: %v", err)
 	}
 	// Wipe any refs/remotes/origin/* that may have been populated by the initial clone.
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/HEAD").Run()
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/HEAD")
 	if err := exec.Command("sh", "-c", "rm -rf '"+filepath.Join(barePath, "refs", "remotes")+"'").Run(); err != nil {
 		t.Fatalf("wipe refs/remotes: %v", err)
 	}
@@ -924,7 +944,7 @@ func TestCreateWorktreePathCollisionDoesNotLeakBranch(t *testing.T) {
 
 	// No agent/* branches should have been created in the bare repo as a
 	// side effect of the failed call.
-	out, runErr := exec.Command("git", "-C", barePath, "for-each-ref", "--format=%(refname)", "refs/heads/agent").Output()
+	out, runErr := outputBareGit(barePath, "for-each-ref", "--format=%(refname)", "refs/heads/agent")
 	if runErr != nil {
 		t.Fatalf("for-each-ref failed: %v", runErr)
 	}
@@ -961,9 +981,9 @@ func TestGetRemoteDefaultBranchScansForCustomDefault(t *testing.T) {
 	// Now wipe origin/HEAD (symbolic-ref -d removes the symref file itself)
 	// and the common defaults so steps 1 and 2 of the resolver miss and we
 	// fall through to the for-each-ref scan.
-	_ = exec.Command("git", "-C", barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD").Run()
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/main").Run()
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/master").Run()
+	_ = runBareGit(barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/main")
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/master")
 
 	got := getRemoteDefaultBranch(barePath)
 	if got != "refs/remotes/origin/develop" {
@@ -998,7 +1018,7 @@ func TestGetRemoteDefaultBranchFallsBackToBareHead(t *testing.T) {
 	}
 
 	// Sanity: origin/* is gone, HEAD is still a symbolic ref to refs/heads/*.
-	if out, err := exec.Command("git", "-C", barePath, "for-each-ref", "refs/remotes/origin/").Output(); err == nil && strings.TrimSpace(string(out)) != "" {
+	if out, err := outputBareGit(barePath, "for-each-ref", "refs/remotes/origin/"); err == nil && strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("precondition failed: refs/remotes/origin/* should be empty, got %s", out)
 	}
 
@@ -1009,7 +1029,7 @@ func TestGetRemoteDefaultBranchFallsBackToBareHead(t *testing.T) {
 
 	// And the resolved ref must actually exist — verifying bareHeadBranch's
 	// rev-parse guard kicked in correctly.
-	if err := exec.Command("git", "-C", barePath, "rev-parse", "--verify", got).Run(); err != nil {
+	if err := runBareGit(barePath, "rev-parse", "--verify", got); err != nil {
 		t.Fatalf("resolved ref %q does not exist: %v", got, err)
 	}
 }
@@ -1053,7 +1073,7 @@ func TestGitFetchRefreshesOriginHeadAfterDefaultChange(t *testing.T) {
 	}
 
 	// refs/remotes/origin/HEAD must now point at the new default branch.
-	out, err := exec.Command("git", "-C", barePath, "symbolic-ref", "refs/remotes/origin/HEAD").Output()
+	out, err := outputBareGit(barePath, "symbolic-ref", "refs/remotes/origin/HEAD")
 	if err != nil {
 		t.Fatalf("symbolic-ref origin/HEAD after fetch: %v", err)
 	}
@@ -1106,9 +1126,9 @@ func TestGetRemoteDefaultBranchUsesBareHeadHintForCustomDefault(t *testing.T) {
 
 	// Knock out the ahead-of-step-3 fallbacks so resolution must rely on
 	// the bare-HEAD hint.
-	_ = exec.Command("git", "-C", barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD").Run()
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/main").Run()
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/master").Run()
+	_ = runBareGit(barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/main")
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/master")
 
 	got := getRemoteDefaultBranch(barePath)
 	if got != "refs/remotes/origin/trunk" {
@@ -1442,12 +1462,12 @@ func TestGetRemoteDefaultBranchAmbiguousOriginReturnsEmpty(t *testing.T) {
 	//   step 1: origin/HEAD
 	//   step 2: origin/main, origin/master
 	//   step 3: the origin/<bareHEAD-name> bridge
-	_ = exec.Command("git", "-C", barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD").Run()
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/main").Run()
-	_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/master").Run()
+	_ = runBareGit(barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/main")
+	_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/master")
 	if bareRef := bareHeadBranch(barePath); bareRef != "" {
 		sameName := strings.TrimPrefix(bareRef, "refs/heads/")
-		_ = exec.Command("git", "-C", barePath, "update-ref", "-d", "refs/remotes/origin/"+sameName).Run()
+		_ = runBareGit(barePath, "update-ref", "-d", "refs/remotes/origin/"+sameName)
 	}
 
 	got := getRemoteDefaultBranch(barePath)
