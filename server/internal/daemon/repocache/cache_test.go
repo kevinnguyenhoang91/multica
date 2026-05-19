@@ -813,7 +813,10 @@ func TestCreateWorktreeFetchesDespiteAgentBranchOnRemote(t *testing.T) {
 	// just pushed). Then re-detach so future pushes to other branches still work.
 	runGitAuthored(t, sourceRepo, "checkout", defaultBranch)
 	addEmptyCommit(t, sourceRepo, "new commit on default branch")
-	sourceHead := gitRefCommit(t, sourceRepo, "refs/heads/"+defaultBranch)
+	// sourceRepo is a non-bare working-tree repo; gitRefCommit uses --git-dir
+	// which only works for bare repos. Since HEAD is currently on defaultBranch
+	// (checked out just above), gitHead resolves the same commit correctly.
+	sourceHead := gitHead(t, sourceRepo)
 	runGitAuthored(t, sourceRepo, "checkout", "--detach", "HEAD")
 
 	// Second worktree: CreateWorktree fetches first. Under the legacy refspec
