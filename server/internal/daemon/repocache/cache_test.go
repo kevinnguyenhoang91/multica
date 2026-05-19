@@ -14,10 +14,10 @@ func testLogger() *slog.Logger {
 }
 
 // bareGitCmd creates a git command for a bare repository.
-// It uses gitEnv() as the command environment so that safe.bareRepository=explicit
-// (injected by multica repo checkout) does not prevent bare-repo discovery via -C.
+// It uses --git-dir (matching production repocache code) so bare-repo commands
+// do not depend on implicit repository discovery semantics.
 func bareGitCmd(barePath string, args ...string) *exec.Cmd {
-	full := append([]string{"-C", barePath}, args...)
+	full := append([]string{"--git-dir=" + barePath}, args...)
 	cmd := exec.Command("git", full...)
 	cmd.Env = gitEnv()
 	return cmd
