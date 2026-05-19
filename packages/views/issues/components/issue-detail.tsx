@@ -14,6 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  FileText,
+  Image as ImageIcon,
   Link as LinkIcon,
   MoreHorizontal,
   PanelRight,
@@ -375,6 +377,11 @@ type CommentLinkBuckets = {
   otherLinks: string[];
 };
 
+type CommentAttachmentBuckets = {
+  images: Attachment[];
+  otherFiles: Attachment[];
+};
+
 const COMMENT_URL_REGEX = /https?:\/\/[^\s<>"'`)\]}]+/gi;
 
 function isPullRequestUrl(url: string): boolean {
@@ -424,6 +431,25 @@ function extractCommentLinks(entries: TimelineEntry[]): CommentLinkBuckets {
     }
   }
   return { pullRequests, otherLinks };
+}
+
+function extractCommentAttachments(entries: TimelineEntry[]): CommentAttachmentBuckets {
+  const images: Attachment[] = [];
+  const otherFiles: Attachment[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (entry.type !== "comment" || !entry.attachments?.length) continue;
+    for (const attachment of entry.attachments) {
+      if (seen.has(attachment.id)) continue;
+      seen.add(attachment.id);
+      if (attachment.content_type.toLowerCase().startsWith("image/")) {
+        images.push(attachment);
+      } else {
+        otherFiles.push(attachment);
+      }
+    }
+  }
+  return { images, otherFiles };
 }
 
 function TimelineSkeleton() {
@@ -712,6 +738,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [parentIssueOpen, setParentIssueOpen] = useState(true);
   const [commentLinksOpen, setCommentLinksOpen] = useState(true);
+  const [commentAttachmentsOpen, setCommentAttachmentsOpen] = useState(true);
   const [pullRequestsOpen, setPullRequestsOpen] = useState(true);
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [tokenUsageOpen, setTokenUsageOpen] = useState(true);
@@ -959,6 +986,10 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     [timelineView.groups, expandedResolved],
   );
   const commentLinks = useMemo(() => extractCommentLinks(timeline), [timeline]);
+  const commentAttachments = useMemo(
+    () => extractCommentAttachments(timeline),
+    [timeline],
+  );
 
   // ID of the trailing activity block — the only one expanded by default.
   const lastActivityGroupId = useMemo(() => {
@@ -1493,6 +1524,61 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                       >
                         <LinkIcon className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate group-hover:text-foreground">{displayUrl(url)}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Comment attachments */}
+      <div>
+        <button
+          className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${commentAttachmentsOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
+          onClick={() => setCommentAttachmentsOpen(!commentAttachmentsOpen)}
+        >
+          {t(($) => $.detail.section_comment_attachments)}
+          <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${commentAttachmentsOpen ? "rotate-90" : ""}`} />
+        </button>
+        {commentAttachmentsOpen && (
+          <div className="pl-2 space-y-2">
+            {commentAttachments.images.length === 0 && commentAttachments.otherFiles.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2">{t(($) => $.detail.comment_attachments_empty)}</p>
+            ) : (
+              <>
+                {commentAttachments.images.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_attachments_images)}</p>
+                    {commentAttachments.images.map((attachment) => (
+                      <a
+                        key={attachment.id}
+                        href={attachment.download_url || attachment.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate group-hover:text-foreground">{attachment.filename}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {commentAttachments.otherFiles.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_attachments_files)}</p>
+                    {commentAttachments.otherFiles.map((attachment) => (
+                      <a
+                        key={attachment.id}
+                        href={attachment.download_url || attachment.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate group-hover:text-foreground">{attachment.filename}</span>
                       </a>
                     ))}
                   </div>
