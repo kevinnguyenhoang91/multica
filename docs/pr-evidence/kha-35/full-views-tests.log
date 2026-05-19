@@ -1,0 +1,182 @@
+
+> @multica/views@0.0.0 test /Users/admin/multica_workspaces/1bf4d616-423b-4247-bc60-436595a6d10f/166e04d1/workdir/multica/packages/views
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90m/Users/admin/multica_workspaces/1bf4d616-423b-4247-bc60-436595a6d10f/166e04d1/workdir/multica/packages/views[39m
+
+ [32m✓[39m modals/create-squad.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 2435[2mms[22m[39m
+     [33m[2m✓[22m[39m auto-clears an additional-members entry when the same agent is picked as leader [33m 487[2mms[22m[39m
+     [33m[2m✓[22m[39m on success with no additional members fires exactly one success toast and navigates [33m 459[2mms[22m[39m
+     [33m[2m✓[22m[39m on success with partial member failure shows success + warning toasts and still navigates [33m 457[2mms[22m[39m
+     [33m[2m✓[22m[39m on createSquad failure shows an error toast, does not navigate, and re-enables submit [33m 471[2mms[22m[39m
+ [32m✓[39m settings/components/repositories-tab.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 3354[2mms[22m[39m
+     [33m[2m✓[22m[39m Save re-enables after editing, then returns to display mode + disabled on success [33m 622[2mms[22m[39m
+     [33m[2m✓[22m[39m Cancel on a dirty edited row reverts the URL and exits edit mode [33m 837[2mms[22m[39m
+     [33m[2m✓[22m[39m Cancel on a newly added (never saved) row removes the row entirely [33m 353[2mms[22m[39m
+     [33m[2m✓[22m[39m accepts scp-like shorthand without browser URL validation blocking submit [33m 618[2mms[22m[39m
+ [32m✓[39m modals/create-issue.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 3037[2mms[22m[39m
+     [33m[2m✓[22m[39m shows success feedback with a direct path to the new issue [33m 1748[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps manual mode open and clears content when create another is enabled [33m 638[2mms[22m[39m
+     [33m[2m✓[22m[39m forwards the picked squad when switching to agent mode [33m 375[2mms[22m[39m
+ [32m✓[39m onboarding/steps/step-questionnaire.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 4703[2mms[22m[39m
+     [33m[2m✓[22m[39m Continue is disabled when no questions are answered [33m 420[2mms[22m[39m
+     [33m[2m✓[22m[39m Continue stays disabled with only one question answered [33m 349[2mms[22m[39m
+     [33m[2m✓[22m[39m Continue stays disabled with only two questions answered [33m 510[2mms[22m[39m
+     [33m[2m✓[22m[39m Continue enables when all three questions are answered [33m 1079[2mms[22m[39m
+     [33m[2m✓[22m[39m Continue re-enables once Other text is filled in [33m 703[2mms[22m[39m
+     [33m[2m✓[22m[39m clears Other text when the user switches to a concrete option [33m 638[2mms[22m[39m
+     [33m[2m✓[22m[39m submits the full answer set including all three questions [33m 558[2mms[22m[39m
+ [32m✓[39m onboarding/steps/step-platform-fork.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 4959[2mms[22m[39m
+     [33m[2m✓[22m[39m CLI dialog: opens with instructions + 'waiting' and a disabled Connect button [33m 762[2mms[22m[39m
+     [33m[2m✓[22m[39m CLI dialog with a selected runtime: Connect enables and fires onNext(runtime) [33m 871[2mms[22m[39m
+     [33m[2m✓[22m[39m Cloud dialog submission does NOT advance the flow [33m 654[2mms[22m[39m
+     [33m[2m✓[22m[39m Cloud submit: disables button, shows 'on the list', does NOT navigate [33m 730[2mms[22m[39m
+     [33m[2m✓[22m[39m Cloud submit: empty reason is allowed, reason forwarded as '' [33m 598[2mms[22m[39m
+     [33m[2m✓[22m[39m Cloud submit stays disabled until email is valid [33m 556[2mms[22m[39m
+ [32m✓[39m agents/components/create-agent-dialog.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 2642[2mms[22m[39m
+     [33m[2m✓[22m[39m disables another member's private runtime in the picker [33m 1131[2mms[22m[39m
+     [33m[2m✓[22m[39m lets a plain member pick another member's public runtime [33m 524[2mms[22m[39m
+     [33m[2m✓[22m[39m defaults the selected runtime to a usable one, not a locked private [33m 362[2mms[22m[39m
+     [33m[2m✓[22m[39m disables Create when the selected runtime is locked (template + no usable fallback) [33m 324[2mms[22m[39m
+ [32m✓[39m settings/components/preferences-tab.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1871[2mms[22m[39m
+     [33m[2m✓[22m[39m does nothing when clicking the current locale [33m 1059[2mms[22m[39m
+     [33m[2m✓[22m[39m when not logged in: persists + reloads, no PATCH [33m 318[2mms[22m[39m
+ [32m✓[39m auth/login-page.test.tsx [2m([22m[2m33 tests[22m[2m)[22m[33m 8897[2mms[22m[39m
+     [33m[2m✓[22m[39m calls sendCode on form submit with email [33m 518[2mms[22m[39m
+     [33m[2m✓[22m[39m shows 'Sending code...' while submitting [33m 545[2mms[22m[39m
+     [33m[2m✓[22m[39m transitions to code step after successful sendCode [33m 695[2mms[22m[39m
+     [33m[2m✓[22m[39m shows error when sendCode fails [33m 565[2mms[22m[39m
+     [33m[2m✓[22m[39m shows generic error when sendCode throws non-Error [33m 525[2mms[22m[39m
+     [33m[2m✓[22m[39m calls verifyCode, seeds workspace list cache, then onSuccess [33m 766[2mms[22m[39m
+     [33m[2m✓[22m[39m shows error on invalid code [33m 751[2mms[22m[39m
+     [33m[2m✓[22m[39m disables resend button during cooldown [33m 538[2mms[22m[39m
+     [33m[2m✓[22m[39m shows resend button with cooldown text after sending code [33m 537[2mms[22m[39m
+     [33m[2m✓[22m[39m calls sendCode again when resend is clicked after cooldown [33m 312[2mms[22m[39m
+     [33m[2m✓[22m[39m CLI code verification redirects to callback URL [33m 741[2mms[22m[39m
+     [33m[2m✓[22m[39m calls onTokenObtained after successful verification [33m 748[2mms[22m[39m
+     [33m[2m✓[22m[39m back button returns to email step [33m 602[2mms[22m[39m
+ [32m✓[39m settings/components/delete-workspace-dialog.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1615[2mms[22m[39m
+     [33m[2m✓[22m[39m disables Delete when input is empty [33m 547[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps Delete disabled when input doesn't match (case-sensitive) [33m 388[2mms[22m[39m
+ [32m✓[39m modals/create-workspace.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1470[2mms[22m[39m
+     [33m[2m✓[22m[39m auto-generates the slug until the user edits it [33m 1136[2mms[22m[39m
+ [32m✓[39m modals/quick-create-issue.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1178[2mms[22m[39m
+     [33m[2m✓[22m[39m writes prompt changes back to the draft store and clears them after submit [33m 605[2mms[22m[39m
+     [33m[2m✓[22m[39m submits squad_id when the user picks a squad in the actor picker [33m 367[2mms[22m[39m
+ [32m✓[39m issues/actions/__tests__/issue-actions-menu.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 2223[2mms[22m[39m
+     [33m[2m✓[22m[39m renders the top-level items when the trigger is clicked [33m 963[2mms[22m[39m
+     [33m[2m✓[22m[39m clicking the Assignee item opens the shared AssigneePicker popover [33m 659[2mms[22m[39m
+     [33m[2m✓[22m[39m clicking Delete issue opens the delete-confirm modal [33m 372[2mms[22m[39m
+ [32m✓[39m agents/components/tabs/mcp-config-tab.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1286[2mms[22m[39m
+     [33m[2m✓[22m[39m saves a parsed MCP config object [33m 607[2mms[22m[39m
+ [32m✓[39m skills/components/runtime-local-skill-import-panel.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1274[2mms[22m[39m
+     [33m[2m✓[22m[39m imports a local skill from the selected runtime [33m 1271[2mms[22m[39m
+ [32m✓[39m issues/components/pull-request-list.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1073[2mms[22m[39m
+     [33m[2m✓[22m[39m uses the sidebar list-row surface instead of a card surface [33m 575[2mms[22m[39m
+ [32m✓[39m editor/attachment-preview-modal.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 1254[2mms[22m[39m
+     [33m[2m✓[22m[39m clicking the backdrop closes the modal [33m 479[2mms[22m[39m
+ [32m✓[39m issues/components/agent-live-card.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1454[2mms[22m[39m
+     [33m[2m✓[22m[39m Stop button opens a confirm dialog and only calls cancelTask after the user confirms [33m 850[2mms[22m[39m
+ [32m✓[39m invitations/invitations-page.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1314[2mms[22m[39m
+     [33m[2m✓[22m[39m renders pending invitations with workspace names [33m 529[2mms[22m[39m
+     [33m[2m✓[22m[39m with no selections, submitting routes to /onboarding [33m 468[2mms[22m[39m
+ [32m✓[39m issues/components/issues-page.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 3489[2mms[22m[39m
+     [33m[2m✓[22m[39m shows loading skeletons initially [33m 659[2mms[22m[39m
+     [33m[2m✓[22m[39m renders issue titles after data loads [33m 743[2mms[22m[39m
+     [33m[2m✓[22m[39m renders board column headers [33m 559[2mms[22m[39m
+     [33m[2m✓[22m[39m groups board columns by assignee [33m 515[2mms[22m[39m
+     [33m[2m✓[22m[39m shows workspace breadcrumb with 'Issues' label [33m 308[2mms[22m[39m
+ [32m✓[39m search/search-command.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 4492[2mms[22m[39m
+     [33m[2m✓[22m[39m closes on a single Escape press from the search input [33m 827[2mms[22m[39m
+     [33m[2m✓[22m[39m filters navigation pages by query [33m 352[2mms[22m[39m
+     [33m[2m✓[22m[39m navigates to page on selection [33m 440[2mms[22m[39m
+     [33m[2m✓[22m[39m lists workspace members and navigates to the member page on selection [33m 561[2mms[22m[39m
+     [33m[2m✓[22m[39m shows New Issue / New Project under Commands and triggers the modal store [33m 451[2mms[22m[39m
+     [33m[2m✓[22m[39m copies issue link and identifier when on an issue detail route [33m 659[2mms[22m[39m
+[90mstdout[2m | chat/components/chat-input.test.tsx[2m > [22m[2mChatInput attachment wiring[2m > [22m[2mpasses attachment_ids to onSend for uploads still referenced in the content
+[22m[39m02:25:00.727 [chat.ui] input.send {
+  contentLength: [33m35[39m,
+  draftKey: [32m'__draft_new__:agent-1'[39m,
+  attachmentCount: [33m1[39m
+}
+
+[90mstdout[2m | chat/components/chat-input.test.tsx[2m > [22m[2mChatInput attachment wiring[2m > [22m[2mdisables send while an upload is in flight, re-enables after it resolves
+[22m[39m02:25:00.896 [chat.ui] input.send {
+  contentLength: [33m49[39m,
+  draftKey: [32m'__draft_new__:agent-1'[39m,
+  attachmentCount: [33m1[39m
+}
+
+ [32m✓[39m chat/components/chat-input.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 878[2mms[22m[39m
+     [33m[2m✓[22m[39m passes attachment_ids to onSend for uploads still referenced in the content [33m 500[2mms[22m[39m
+ [32m✓[39m workspace/create-workspace-form.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 737[2mms[22m[39m
+     [33m[2m✓[22m[39m calls onSuccess with the created workspace [33m 341[2mms[22m[39m
+ [32m✓[39m issues/components/issue-detail.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 7204[2mms[22m[39m
+     [33m[2m✓[22m[39m shows loading skeleton while data is loading [33m 544[2mms[22m[39m
+     [33m[2m✓[22m[39m renders issue title and description after loading [33m 768[2mms[22m[39m
+     [33m[2m✓[22m[39m renders workspace name as breadcrumb link [33m 427[2mms[22m[39m
+     [33m[2m✓[22m[39m renders properties sidebar with all core rows plus set optional rows [33m 521[2mms[22m[39m
+     [33m[2m✓[22m[39m hides every optional property row when none are set [33m 400[2mms[22m[39m
+     [33m[2m✓[22m[39m renders Details section with Created by and dates [33m 570[2mms[22m[39m
+     [33m[2m✓[22m[39m renders comment-derived links in sidebar with PR links split from other URLs [33m 801[2mms[22m[39m
+     [33m[2m✓[22m[39m renders Activity section header [33m 353[2mms[22m[39m
+     [33m[2m✓[22m[39m collapses non-trailing activity blocks and expands the last one by default [33m 515[2mms[22m[39m
+       [33m[2m✓[22m[39m scrolls to the highlighted comment after both issue and timeline finish loading [33m 359[2mms[22m[39m
+       [33m[2m✓[22m[39m still scrolls when the timeline is ready before the issue (regression for inbox click) [33m 386[2mms[22m[39m
+       [33m[2m✓[22m[39m auto-expands a folded resolved thread when deep-link target is a reply inside it [33m 545[2mms[22m[39m
+     [33m[2m✓[22m[39m sends empty description when editor is cleared [33m 358[2mms[22m[39m
+ [32m✓[39m runtimes/components/runtime-detail-visibility.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 594[2mms[22m[39m
+     [33m[2m✓[22m[39m shows owner-editable visibility choices when the caller owns the runtime [33m 416[2mms[22m[39m
+ [32m✓[39m editor/readonly-content.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 824[2mms[22m[39m
+     [33m[2m✓[22m[39m renders mermaid code fences in a sized sandbox iframe with legacy rgb colors [33m 318[2mms[22m[39m
+ [32m✓[39m agents/components/agent-live-peek-card.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 604[2mms[22m[39m
+     [33m[2m✓[22m[39m renders Working state with the linked current issue [33m 527[2mms[22m[39m
+ [32m✓[39m modals/create-project.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 607[2mms[22m[39m
+     [33m[2m✓[22m[39m exposes full repository URLs in the repository picker [33m 603[2mms[22m[39m
+ [32m✓[39m workspace/no-access-page.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 653[2mms[22m[39m
+     [33m[2m✓[22m[39m navigates to root on 'Go to my workspaces' [33m 434[2mms[22m[39m
+ [32m✓[39m agents/components/tabs/skills-tab.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 527[2mms[22m[39m
+     [33m[2m✓[22m[39m does not render the inline Local Runtime Skills section even for local-runtime agents [33m 510[2mms[22m[39m
+ [32m✓[39m onboarding/components/step-header.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 449[2mms[22m[39m
+ [32m✓[39m editor/extensions/markdown-paste.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 376[2mms[22m[39m
+ [32m✓[39m layout/app-sidebar.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 499[2mms[22m[39m
+ [32m✓[39m onboarding/steps/step-runtime-connect.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 372[2mms[22m[39m
+ [32m✓[39m layout/page-header.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+ [32m✓[39m navigation/app-link.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 138[2mms[22m[39m
+ [32m✓[39m issues/actions/__tests__/use-issue-actions.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 205[2mms[22m[39m
+ [32m✓[39m issues/hooks/issue-delete-mutations.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 154[2mms[22m[39m
+ [32m✓[39m editor/extensions/mention-suggestion.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[32m 293[2mms[22m[39m
+ [32m✓[39m workspace/paths-hooks.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 116[2mms[22m[39m
+ [32m✓[39m editor/use-download-attachment.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 113[2mms[22m[39m
+ [32m✓[39m editor/content-editor.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 143[2mms[22m[39m
+ [32m✓[39m editor/utils/preprocess-links.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m autopilots/components/trigger-config.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+ [32m✓[39m issues/hooks/use-issue-timeline.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 110[2mms[22m[39m
+ [32m✓[39m dashboard/utils.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m workspace/use-workspace-seen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m locales/parity.test.ts [2m([22m[2m51 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m runtimes/utils.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m runtimes/components/runtime-machines.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m chat/lib/copy-text.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m editor/extensions/submit-shortcut.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m editor/extensions/pinyin-match.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m issues/utils/filter.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m editor/utils/preview.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m common/task-transcript/redact.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m issues/utils/strip-mention-markdown.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m workspace/slug.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m editor/file-card-href.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m inbox/components/inbox-display.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m skills/hooks/use-can-edit-skill.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m editor/extensions/mention-extension.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m projects/components/project-issue-metrics.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m agents/components/tabs/activity-tab.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m chat/components/context-anchor.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m runtimes/components/runtime-list.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m65 passed[39m[22m[90m (65)[39m
+[2m      Tests [22m [1m[32m579 passed[39m[22m[90m (579)[39m
+[2m   Start at [22m 09:24:40
+[2m   Duration [22m 33.32s[2m (transform 16.32s, setup 12.07s, import 103.43s, tests 70.21s, environment 134.14s)[22m
+
