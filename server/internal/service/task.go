@@ -564,6 +564,8 @@ type QuickCreateContext struct {
 	WorkspaceID string `json:"workspace_id"`
 	ProjectID   string `json:"project_id,omitempty"`
 	SquadID     string `json:"squad_id,omitempty"`
+	// New tasks always set UseSandbox; the pointer preserves compatibility with
+	// older queued payloads that may omit the field.
 	UseSandbox  *bool  `json:"use_sandbox,omitempty"`
 }
 
