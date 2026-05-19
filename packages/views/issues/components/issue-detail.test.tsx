@@ -597,6 +597,89 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getByText("Add property")).toBeInTheDocument();
   });
 
+  it("renders a Sandboxing section when the issue has sandbox-enabled runs", async () => {
+    mockApiObj.listTasksByIssue.mockResolvedValue([
+      {
+        id: "task-1",
+        agent_id: "agent-1",
+        runtime_id: "runtime-1",
+        issue_id: "issue-1",
+        status: "completed",
+        priority: 1,
+        dispatched_at: "2026-01-18T00:00:00Z",
+        started_at: "2026-01-18T00:00:05Z",
+        completed_at: "2026-01-18T00:05:00Z",
+        result: { sandbox: { mode: "workspace-write", sandboxed: true } },
+        error: null,
+        created_at: "2026-01-18T00:00:00Z",
+        use_sandbox: true,
+        work_dir: "/tmp/multica/workdir",
+      },
+    ]);
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Sandboxing")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByText("workspace-write")).toBeInTheDocument();
+    expect(screen.getByText(/runtime-1/)).toBeInTheDocument();
+    expect(screen.getByText("/tmp/multica/workdir")).toBeInTheDocument();
+  });
+
+  it("keeps Sandboxing visible for mixed history and uses metadata from latest enabled run", async () => {
+    mockApiObj.listTasksByIssue.mockResolvedValue([
+      {
+        id: "task-2",
+        agent_id: "agent-1",
+        runtime_id: "runtime-2",
+        issue_id: "issue-1",
+        status: "completed",
+        priority: 1,
+        dispatched_at: "2026-01-19T00:00:00Z",
+        started_at: "2026-01-19T00:00:05Z",
+        completed_at: "2026-01-19T00:05:00Z",
+        result: { sandbox: { mode: "danger-full-access", sandboxed: false } },
+        error: null,
+        created_at: "2026-01-19T00:00:00Z",
+        use_sandbox: false,
+        work_dir: "/tmp/multica/non-sandbox",
+      },
+      {
+        id: "task-1",
+        agent_id: "agent-1",
+        runtime_id: "runtime-1",
+        issue_id: "issue-1",
+        status: "completed",
+        priority: 1,
+        dispatched_at: "2026-01-18T00:00:00Z",
+        started_at: "2026-01-18T00:00:05Z",
+        completed_at: "2026-01-18T00:05:00Z",
+        result: { sandbox: { mode: "workspace-write", sandboxed: true } },
+        error: null,
+        created_at: "2026-01-18T00:00:00Z",
+        use_sandbox: true,
+        work_dir: "/tmp/multica/sandbox",
+      },
+    ]);
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Sandboxing")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByText("workspace-write")).toBeInTheDocument();
+    expect(screen.getByText(/runtime-1/)).toBeInTheDocument();
+    expect(screen.getByText("/tmp/multica/sandbox")).toBeInTheDocument();
+    expect(screen.queryByText("danger-full-access")).not.toBeInTheDocument();
+    expect(screen.queryByText(/runtime-2/)).not.toBeInTheDocument();
+    expect(screen.queryByText("/tmp/multica/non-sandbox")).not.toBeInTheDocument();
+  });
+
   it("uses a non-resizable layout with the sidebar sheet closed by default on mobile", async () => {
     mockViewport.isMobile = true;
 
