@@ -53,6 +53,8 @@ func gitEnv() []string {
 	keyMap := make(map[int]string, existingCount)
 	valMap := make(map[int]string, existingCount)
 	for _, e := range base {
+		// existingCount is usually tiny (often 0-3), so the small nested scan
+		// keeps the code simple without meaningful runtime impact.
 		for i := 0; i < existingCount; i++ {
 			idx := strconv.Itoa(i)
 			if after, ok := strings.CutPrefix(e, "GIT_CONFIG_KEY_"+idx+"="); ok {
