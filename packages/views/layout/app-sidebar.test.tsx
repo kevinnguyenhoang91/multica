@@ -46,6 +46,7 @@ vi.mock("@multica/ui/components/ui/sidebar", () => ({
   SidebarMenuButton: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SidebarRail: () => null,
+  SidebarTrigger: () => <button data-testid="sidebar-trigger" type="button" />,
 }));
 vi.mock("@multica/ui/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -150,5 +151,10 @@ describe("PinRow", () => {
     detail.current = { isPending: false, isError: false, data: { identifier: "MUL-123", title: "Keep this pin", status: "todo" }, error: null };
     render(<AppSidebar />);
     expect(await screen.findByText("MUL-123 Keep this pin")).toBeInTheDocument();
+  });
+
+  it("renders sidebar header trigger", () => {
+    render(<AppSidebar />);
+    expect(screen.getByTestId("sidebar-trigger")).toBeInTheDocument();
   });
 });

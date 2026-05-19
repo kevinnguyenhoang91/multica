@@ -54,6 +54,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarTrigger,
 } from "@multica/ui/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -580,6 +581,9 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+            </SidebarMenuItem>
+            <SidebarMenuItem className="ml-auto hidden md:block">
+              <SidebarTrigger />
             </SidebarMenuItem>
           </SidebarMenu>
           <SidebarMenu>
