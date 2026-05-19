@@ -76,6 +76,7 @@ type Task struct {
 	AutopilotSource          string                `json:"autopilot_source,omitempty"`            // manual, schedule, webhook, or api
 	AutopilotTriggerPayload  json.RawMessage       `json:"autopilot_trigger_payload,omitempty"`   // optional trigger payload for webhook/api runs
 	QuickCreatePrompt        string                `json:"quick_create_prompt,omitempty"`         // user's natural-language input for quick-create tasks
+	UseSandbox              *bool                 `json:"use_sandbox,omitempty"`                 // quick-create sandbox toggle; nil on non-quick-create tasks
 	QuickCreateAttachmentIDs []string              `json:"quick_create_attachment_ids,omitempty"` // attachments uploaded in the quick-create prompt and bound by issue create
 	SquadID                  string                `json:"squad_id,omitempty"`                    // when the picker was a squad, the squad's UUID; Agent is still the resolved leader
 	SquadName                string                `json:"squad_name,omitempty"`                  // display name for the picker squad, used in prompt text
