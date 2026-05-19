@@ -791,6 +791,83 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getAllByRole("link", { name: "github.com/acme/multica/pull/42" })).toHaveLength(1);
   });
 
+  it("renders comment attachments grouped into images and other files", async () => {
+    mockApiObj.listTimeline.mockResolvedValue([
+      ...mockTimeline,
+      {
+        type: "comment",
+        id: "comment-3",
+        actor_type: "agent",
+        actor_id: "agent-1",
+        content: "Attached screenshot and logs",
+        parent_id: null,
+        created_at: "2026-01-18T00:00:00Z",
+        updated_at: "2026-01-18T00:00:00Z",
+        comment_type: "comment",
+        attachments: [
+          {
+            id: "att-image-1",
+            workspace_id: "ws-1",
+            issue_id: "issue-1",
+            comment_id: "comment-3",
+            chat_session_id: null,
+            chat_message_id: null,
+            uploader_type: "agent",
+            uploader_id: "agent-1",
+            filename: "error-screenshot.png",
+            url: "https://cdn.example.com/error-screenshot.png",
+            download_url: "https://cdn.example.com/error-screenshot.png?sig=1",
+            content_type: "image/png",
+            size_bytes: 1024,
+            created_at: "2026-01-18T00:00:00Z",
+          },
+        ],
+      },
+      {
+        type: "comment",
+        id: "comment-4",
+        actor_type: "member",
+        actor_id: "user-1",
+        content: "Reply with log file",
+        parent_id: "comment-3",
+        created_at: "2026-01-18T00:05:00Z",
+        updated_at: "2026-01-18T00:05:00Z",
+        comment_type: "comment",
+        attachments: [
+          {
+            id: "att-doc-1",
+            workspace_id: "ws-1",
+            issue_id: "issue-1",
+            comment_id: "comment-4",
+            chat_session_id: null,
+            chat_message_id: null,
+            uploader_type: "member",
+            uploader_id: "user-1",
+            filename: "logs.txt",
+            url: "https://cdn.example.com/logs.txt",
+            download_url: "https://cdn.example.com/logs.txt?sig=1",
+            content_type: "text/plain",
+            size_bytes: 512,
+            created_at: "2026-01-18T00:05:00Z",
+          },
+        ],
+      },
+    ] as TimelineEntry[]);
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Comment attachments")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Images from comments")).toBeInTheDocument();
+    expect(screen.getByText("Other attachments from comments")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "error-screenshot.png" }))
+      .toHaveAttribute("href", "https://cdn.example.com/error-screenshot.png?sig=1");
+    expect(screen.getByRole("link", { name: "logs.txt" }))
+      .toHaveAttribute("href", "https://cdn.example.com/logs.txt?sig=1");
+  });
+
   it("shows 'not found' message when issue does not exist", async () => {
     mockApiObj.getIssue.mockRejectedValue(new Error("Not found"));
 
