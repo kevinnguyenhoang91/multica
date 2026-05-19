@@ -31,7 +31,7 @@ import { Button } from "@multica/ui/components/ui/button";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@multica/ui/components/ui/resizable";
 import { Sheet, SheetContent } from "@multica/ui/components/ui/sheet";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
-import { ContentEditor, type ContentEditorRef, TitleEditor, useFileDropZone, FileDropOverlay } from "../../editor";
+import { ContentEditor, type ContentEditorRef, TitleEditor, useFileDropZone, FileDropOverlay, useDownloadAttachment } from "../../editor";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import {
   Tooltip,
@@ -438,7 +438,10 @@ function extractCommentAttachments(entries: TimelineEntry[]): CommentAttachmentB
     for (const attachment of entry.attachments) {
       if (seen.has(attachment.id)) continue;
       seen.add(attachment.id);
-      if (attachment.content_type.toLowerCase().startsWith("image/")) {
+      const contentType = typeof attachment.content_type === "string"
+        ? attachment.content_type.toLowerCase()
+        : "";
+      if (contentType.startsWith("image/")) {
         images.push(attachment);
       } else {
         otherFiles.push(attachment);
@@ -686,6 +689,7 @@ interface IssueDetailProps {
 
 export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId }: IssueDetailProps) {
   const { t } = useT("issues");
+  const downloadAttachment = useDownloadAttachment();
   const id = issueId;
   const router = useNavigation();
   const user = useAuthStore((s) => s.user);
@@ -1514,16 +1518,15 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                   <div className="space-y-1">
                     <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_attachments_images)}</p>
                     {commentAttachments.images.map((attachment) => (
-                      <a
+                      <button
+                        type="button"
                         key={attachment.id}
-                        href={attachment.download_url || attachment.url}
-                        target="_blank"
-                        rel="noreferrer noopener"
+                        onClick={() => void downloadAttachment(attachment.id)}
                         className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
                       >
                         <ImageIcon className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate group-hover:text-foreground">{attachment.filename}</span>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -1531,16 +1534,15 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                   <div className="space-y-1">
                     <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_attachments_files)}</p>
                     {commentAttachments.otherFiles.map((attachment) => (
-                      <a
+                      <button
+                        type="button"
                         key={attachment.id}
-                        href={attachment.download_url || attachment.url}
-                        target="_blank"
-                        rel="noreferrer noopener"
+                        onClick={() => void downloadAttachment(attachment.id)}
                         className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
                       >
                         <FileText className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate group-hover:text-foreground">{attachment.filename}</span>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}
