@@ -27,28 +27,73 @@ import (
 // caches and worktrees, so the ownership check adds no security value
 // and breaks CI environments where the runner UID differs from the
 // directory owner.
+//
+// Any safe.bareRepository setting in the inherited env is filtered out:
+// that setting is injected by the multica CLI/daemon to harden normal agent
+// shells, but the repocache layer operates only on daemon-owned bare repos.
+// Most calls now use --git-dir explicitly; stripping this inherited setting
+// prevents ambient policy from breaking any implicit-discovery call paths and
+// keeps repocache behavior independent from caller shell configuration.
 func gitEnv() []string {
 	base := os.Environ()
 
-	// Find the existing GIT_CONFIG_COUNT so we append at the next index
-	// rather than overwriting any env-scoped git config (auth, URL
-	// rewrites, extra headers, etc.).
-	existing := 0
+	// Parse existing GIT_CONFIG_COUNT to know how many key/value pairs exist.
+	existingCount := 0
 	for _, e := range base {
 		if strings.HasPrefix(e, "GIT_CONFIG_COUNT=") {
 			if n, err := strconv.Atoi(strings.TrimPrefix(e, "GIT_CONFIG_COUNT=")); err == nil {
-				existing = n
+				existingCount = n
 			}
 		}
 	}
 
-	idx := strconv.Itoa(existing)
-	return append(base,
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_CONFIG_COUNT="+strconv.Itoa(existing+1),
-		"GIT_CONFIG_KEY_"+idx+"=safe.directory",
-		"GIT_CONFIG_VALUE_"+idx+"=*",
-	)
+	// Collect existing GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs, dropping
+	// any safe.bareRepository entry that would prevent bare-repo operations.
+	keyMap := make(map[int]string, existingCount)
+	valMap := make(map[int]string, existingCount)
+	for _, e := range base {
+		// existingCount is usually tiny (often 0-3), so the small nested scan
+		// keeps the code simple without meaningful runtime impact.
+		for i := 0; i < existingCount; i++ {
+			idx := strconv.Itoa(i)
+			if after, ok := strings.CutPrefix(e, "GIT_CONFIG_KEY_"+idx+"="); ok {
+				keyMap[i] = after
+			} else if after, ok := strings.CutPrefix(e, "GIT_CONFIG_VALUE_"+idx+"="); ok {
+				valMap[i] = after
+			}
+		}
+	}
+
+	type cfgEntry struct{ key, val string }
+	var kept []cfgEntry
+	for i := 0; i < existingCount; i++ {
+		k := strings.ToLower(keyMap[i])
+		if k == "safe.barerepository" {
+			continue // strip — the daemon trusts its own bare caches
+		}
+		kept = append(kept, cfgEntry{keyMap[i], valMap[i]})
+	}
+	// Append the permissive safe.directory override.
+	kept = append(kept, cfgEntry{"safe.directory", "*"})
+
+	// Build a clean env: strip all existing GIT_CONFIG_* vars, then add ours.
+	var newEnv []string
+	for _, e := range base {
+		if strings.HasPrefix(e, "GIT_CONFIG_COUNT=") ||
+			strings.HasPrefix(e, "GIT_CONFIG_KEY_") ||
+			strings.HasPrefix(e, "GIT_CONFIG_VALUE_") {
+			continue
+		}
+		newEnv = append(newEnv, e)
+	}
+	newEnv = append(newEnv, "GIT_TERMINAL_PROMPT=0")
+	newEnv = append(newEnv, "GIT_CONFIG_COUNT="+strconv.Itoa(len(kept)))
+	for i, entry := range kept {
+		idx := strconv.Itoa(i)
+		newEnv = append(newEnv, "GIT_CONFIG_KEY_"+idx+"="+entry.key)
+		newEnv = append(newEnv, "GIT_CONFIG_VALUE_"+idx+"="+entry.val)
+	}
+	return newEnv
 }
 
 var agentGitExcludePatterns = []string{".agent_context", "CLAUDE.md", "AGENTS.md", ".claude", ".opencode"}
@@ -283,7 +328,7 @@ func gitFetch(barePath string) error {
 	// getRemoteDefaultBranch, but the modern-cache default-branch-change
 	// path (the only path that can't be recovered any other way) relies
 	// on this call.
-	cmd := exec.Command("git", "-C", barePath, "remote", "set-head", "origin", "--auto")
+	cmd := exec.Command("git", "--git-dir="+barePath, "remote", "set-head", "origin", "--auto")
 	cmd.Env = gitEnv()
 
 	_ = cmd.Run()
@@ -293,7 +338,7 @@ func gitFetch(barePath string) error {
 // runGitFetch is the raw `git fetch origin` wrapper. Callers should go through
 // gitFetch, which migrates legacy caches first.
 func runGitFetch(barePath string) error {
-	cmd := exec.Command("git", "-C", barePath, "fetch", "origin")
+	cmd := exec.Command("git", "--git-dir="+barePath, "fetch", "origin")
 	cmd.Env = gitEnv()
 
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -328,7 +373,7 @@ func ensureRemoteTrackingLayout(barePath string) error {
 	}
 	// Set refs/remotes/origin/HEAD so getRemoteDefaultBranch can read it.
 	// Non-fatal: if this fails we fall back to origin/main, origin/master.
-	cmd := exec.Command("git", "-C", barePath, "remote", "set-head", "origin", "--auto")
+	cmd := exec.Command("git", "--git-dir="+barePath, "remote", "set-head", "origin", "--auto")
 	cmd.Env = gitEnv()
 
 	_ = cmd.Run()
@@ -339,7 +384,8 @@ func ensureRemoteTrackingLayout(barePath string) error {
 // the empty string if it's not set. Distinguishes "missing" (exit 1) from
 // real git errors.
 func readFetchRefspec(barePath string) (string, error) {
-	cmd := exec.Command("git", "-C", barePath, "config", "--get", "remote.origin.fetch")
+	cmd := exec.Command("git", "--git-dir="+barePath, "config", "--get", "remote.origin.fetch")
+	cmd.Env = gitEnv()
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -352,7 +398,8 @@ func readFetchRefspec(barePath string) (string, error) {
 }
 
 func setFetchRefspec(barePath, refspec string) error {
-	cmd := exec.Command("git", "-C", barePath, "config", "remote.origin.fetch", refspec)
+	cmd := exec.Command("git", "--git-dir="+barePath, "config", "remote.origin.fetch", refspec)
+	cmd.Env = gitEnv()
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -538,7 +585,8 @@ func resolveBaseRef(barePath, requestedRef string) (string, error) {
 }
 
 func gitRefExists(repoPath, ref string) bool {
-	cmd := exec.Command("git", "-C", repoPath, "rev-parse", "--verify", "--quiet", ref)
+	cmd := exec.Command("git", "--git-dir="+repoPath, "rev-parse", "--verify", "--quiet", ref)
+	cmd.Env = gitEnv()
 
 	return cmd.Run() == nil
 }
@@ -569,7 +617,8 @@ func createWorktree(gitRoot, worktreePath, branchName, baseRef string) (string, 
 }
 
 func runWorktreeAdd(gitRoot, worktreePath, branchName, baseRef string) error {
-	cmd := exec.Command("git", "-C", gitRoot, "worktree", "add", "-b", branchName, worktreePath, baseRef)
+	cmd := exec.Command("git", "--git-dir="+gitRoot, "worktree", "add", "-b", branchName, worktreePath, baseRef)
+	cmd.Env = gitEnv()
 
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git worktree add: %s: %w", strings.TrimSpace(string(out)), err)
@@ -670,11 +719,13 @@ func getRemoteDefaultBranch(barePath string) string {
 	//    repo can leave a symref pointing at a deleted ref, and returning
 	//    it here would later fail in `git worktree add` with a confusing
 	//    "invalid reference" error.
-	symrefCmd := exec.Command("git", "-C", barePath, "symbolic-ref", "refs/remotes/origin/HEAD")
+	symrefCmd := exec.Command("git", "--git-dir="+barePath, "symbolic-ref", "refs/remotes/origin/HEAD")
+	symrefCmd.Env = gitEnv()
 	if out, err := symrefCmd.Output(); err == nil {
 		ref := strings.TrimSpace(string(out))
 		if ref != "" {
-			verifyCmd := exec.Command("git", "-C", barePath, "rev-parse", "--verify", ref)
+			verifyCmd := exec.Command("git", "--git-dir="+barePath, "rev-parse", "--verify", ref)
+			verifyCmd.Env = gitEnv()
 			if err := verifyCmd.Run(); err == nil {
 				return ref
 			}
@@ -682,7 +733,8 @@ func getRemoteDefaultBranch(barePath string) string {
 	}
 	// 2) Common default branch names under the origin namespace.
 	for _, candidate := range []string{"refs/remotes/origin/main", "refs/remotes/origin/master"} {
-		cmd := exec.Command("git", "-C", barePath, "rev-parse", "--verify", candidate)
+		cmd := exec.Command("git", "--git-dir="+barePath, "rev-parse", "--verify", candidate)
+		cmd.Env = gitEnv()
 	
 		if err := cmd.Run(); err == nil {
 			return candidate
@@ -697,7 +749,8 @@ func getRemoteDefaultBranch(barePath string) string {
 	bareRef := bareHeadBranch(barePath)
 	if bareRef != "" {
 		originRef := "refs/remotes/origin/" + strings.TrimPrefix(bareRef, "refs/heads/")
-		cmd := exec.Command("git", "-C", barePath, "rev-parse", "--verify", originRef)
+		cmd := exec.Command("git", "--git-dir="+barePath, "rev-parse", "--verify", originRef)
+		cmd.Env = gitEnv()
 	
 		if err := cmd.Run(); err == nil {
 			return originRef
@@ -711,7 +764,8 @@ func getRemoteDefaultBranch(barePath string) string {
 	//    "legacy empty" apart from "ambiguous".
 	originCount := 0
 	var singleton string
-	foreachCmd := exec.Command("git", "-C", barePath, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/")
+	foreachCmd := exec.Command("git", "--git-dir="+barePath, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/")
+	foreachCmd.Env = gitEnv()
 	if out, err := foreachCmd.Output(); err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 			line = strings.TrimSpace(line)
@@ -748,7 +802,8 @@ func getRemoteDefaultBranch(barePath string) string {
 // modern caches should never reach this path because origin/* resolution
 // succeeds first.
 func bareHeadBranch(barePath string) string {
-	cmd := exec.Command("git", "-C", barePath, "symbolic-ref", "HEAD")
+	cmd := exec.Command("git", "--git-dir="+barePath, "symbolic-ref", "HEAD")
+	cmd.Env = gitEnv()
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -758,7 +813,8 @@ func bareHeadBranch(barePath string) string {
 	if ref == "" {
 		return ""
 	}
-	verifyCmd := exec.Command("git", "-C", barePath, "rev-parse", "--verify", ref)
+	verifyCmd := exec.Command("git", "--git-dir="+barePath, "rev-parse", "--verify", ref)
+	verifyCmd.Env = gitEnv()
 	if err := verifyCmd.Run(); err != nil {
 		return ""
 	}

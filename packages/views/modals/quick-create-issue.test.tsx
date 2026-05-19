@@ -9,6 +9,7 @@ const mockSetLastProjectId = vi.hoisted(() => vi.fn());
 const mockSetPrompt = vi.hoisted(() => vi.fn());
 const mockClearPrompt = vi.hoisted(() => vi.fn());
 const mockSetKeepOpen = vi.hoisted(() => vi.fn());
+const mockSetUseSandbox = vi.hoisted(() => vi.fn());
 const mockSetLastMode = vi.hoisted(() => vi.fn());
 const mockToastSuccess = vi.hoisted(() => vi.fn());
 
@@ -23,6 +24,8 @@ const mockQuickCreateStore = {
   clearPrompt: mockClearPrompt,
   keepOpen: false,
   setKeepOpen: mockSetKeepOpen,
+  useSandbox: true,
+  setUseSandbox: mockSetUseSandbox,
 };
 
 // Per-test override for the projects query, so tests can swap between
@@ -240,9 +243,17 @@ vi.mock("@multica/ui/components/ui/button", () => ({
 }));
 
 vi.mock("@multica/ui/components/ui/switch", () => ({
-  Switch: ({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (v: boolean) => void }) => (
+  Switch: ({
+    checked,
+    onCheckedChange,
+    "aria-label": ariaLabel,
+  }: {
+    checked: boolean;
+    onCheckedChange: (v: boolean) => void;
+    "aria-label"?: string;
+  }) => (
     <input
-      aria-label="Create another"
+      aria-label={ariaLabel ?? "Create another"}
       type="checkbox"
       checked={checked}
       onChange={(e) => onCheckedChange(e.target.checked)}
@@ -283,12 +294,16 @@ describe("AgentCreatePanel", () => {
     mockQuickCreateStore.lastProjectId = null;
     mockQuickCreateStore.prompt = "Persisted draft prompt";
     mockQuickCreateStore.keepOpen = false;
+    mockQuickCreateStore.useSandbox = true;
     mockProjectsQuery.data = [];
     mockProjectsQuery.isSuccess = true;
     mockSquadsData.list = [];
     mockQuickCreateIssue.mockResolvedValue(undefined);
     mockSetKeepOpen.mockImplementation((value: boolean) => {
       mockQuickCreateStore.keepOpen = value;
+    });
+    mockSetUseSandbox.mockImplementation((value: boolean) => {
+      mockQuickCreateStore.useSandbox = value;
     });
   });
 
@@ -323,6 +338,7 @@ describe("AgentCreatePanel", () => {
         agent_id: "agent-1",
         prompt: "New agent prompt",
         project_id: undefined,
+        use_sandbox: true,
       });
     });
 
@@ -365,9 +381,39 @@ describe("AgentCreatePanel", () => {
         squad_id: "squad-1",
         prompt: "Investigate the regression",
         project_id: undefined,
+        use_sandbox: true,
       });
     });
     expect(mockSetLastActor).toHaveBeenCalledWith("squad", "squad-1");
+  });
+
+  it("submits use_sandbox=false when the sandboxing switch is turned off", async () => {
+    const user = userEvent.setup();
+
+    renderPanel({ onClose: vi.fn(), isExpanded: false, setIsExpanded: vi.fn() });
+
+    await user.click(screen.getByRole("checkbox", { name: "Enable sandboxing" }));
+    await user.clear(
+      screen.getByPlaceholderText(
+        'Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"',
+      ),
+    );
+    await user.type(
+      screen.getByPlaceholderText(
+        'Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"',
+      ),
+      "Investigate bug in host mode",
+    );
+    await user.click(screen.getByRole("button", { name: /^Create \(/i }));
+
+    await waitFor(() => {
+      expect(mockQuickCreateIssue).toHaveBeenCalledWith({
+        agent_id: "agent-1",
+        prompt: "Investigate bug in host mode",
+        project_id: undefined,
+        use_sandbox: false,
+      });
+    });
   });
 
   // Squads whose leader agent isn't visible (archived, private, etc.) must

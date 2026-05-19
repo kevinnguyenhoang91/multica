@@ -133,7 +133,13 @@ export function AgentCreatePanel({
   const clearPrompt = useQuickCreateStore((s) => s.clearPrompt);
   const keepOpen = useQuickCreateStore((s) => s.keepOpen);
   const setKeepOpen = useQuickCreateStore((s) => s.setKeepOpen);
+  const persistedUseSandbox = useQuickCreateStore((s) => s.useSandbox);
+  const setPersistedUseSandbox = useQuickCreateStore((s) => s.setUseSandbox);
   const setLastMode = useCreateModeStore((s) => s.setLastMode);
+  const [useSandbox, setUseSandbox] = useState<boolean>(() => {
+    if (typeof data?.use_sandbox === "boolean") return data.use_sandbox;
+    return persistedUseSandbox;
+  });
 
   // Resolve a candidate actor against the currently-visible agents / squads.
   // Returns null when the candidate doesn't exist in this workspace right
@@ -290,7 +296,7 @@ export function AgentCreatePanel({
           : { squad_id: actor.id }),
         prompt: md,
         project_id: projectId ?? undefined,
-        parent_issue_id: parentIssueId,
+        use_sandbox: useSandbox,
       });
       setLastActor(actor.type, actor.id);
       setLastProjectId(projectId);
@@ -369,17 +375,14 @@ export function AgentCreatePanel({
         : {}),
     });
     setLastMode("manual");
-    // Hand the picked project and the parent-issue context to the manual
-    // panel through the same `data` channel that already carries agent_id /
-    // parent_issue_id. The manual panel reads these on mount; this preserves
-    // the user's selection (and the sub-issue intent seeded by
-    // openCreateSubIssue) across the mode flip without piping a third store
-    // through.
-    const carry: Record<string, unknown> = {};
-    if (projectId) carry.project_id = projectId;
-    if (parentIssueId) carry.parent_issue_id = parentIssueId;
-    if (parentIssueIdentifier) carry.parent_issue_identifier = parentIssueIdentifier;
-    onSwitchMode?.(Object.keys(carry).length > 0 ? carry : null);
+    // Hand the picked project to the manual panel through the same `data`
+    // channel that already carries agent_id / parent_issue_id. The manual
+    // panel reads `data.project_id` on mount; this preserves the user's
+    // selection across the mode flip without piping a third store through.
+    onSwitchMode?.({
+      ...(projectId ? { project_id: projectId } : {}),
+      use_sandbox: useSandbox,
+    });
   };
 
   return (
@@ -543,8 +546,21 @@ export function AgentCreatePanel({
                 size="sm"
                 checked={keepOpen}
                 onCheckedChange={setKeepOpen}
+                aria-label={t(($) => $.create_issue.create_another)}
               />
               {t(($) => $.create_issue.create_another)}
+            </label>
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <Switch
+                size="sm"
+                checked={useSandbox}
+                onCheckedChange={(v) => {
+                  setUseSandbox(v);
+                  setPersistedUseSandbox(v);
+                }}
+                aria-label={t(($) => $.create_issue.sandbox_toggle)}
+              />
+              {t(($) => $.create_issue.sandbox_toggle)}
             </label>
             <Button
               size="sm"
