@@ -111,83 +111,74 @@ vi.mock("../../navigation", () => ({
 }));
 
 // Mock editor components (Tiptap requires real DOM)
-vi.mock("../../editor", async () => {
-  const { AttachmentDownloadProvider } = await vi.importActual<
-    typeof import("../../editor/attachment-download-context")
-  >("../../editor/attachment-download-context");
-  const actual = await importOriginal<typeof import("../../editor")>();
-
-  return {
-    ...actual,
-    AttachmentDownloadProvider,
-    }),
-    // Inert preview hook — comment-card's AttachmentList uses it to gate the
-    // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
-    useAttachmentPreview: () => ({
-      open: vi.fn(),
-      tryOpen: () => false,
-      modal: null,
-    isPreviewable: () => false,
-    ReadonlyContent: ({ content }: { content: string }) => (
-      <div data-testid="readonly-content">{content}</div>
-    ),
-    ContentEditor: forwardRef(function MockContentEditor(
-      { defaultValue, onUpdate, placeholder }: any,
-      ref: any,
-    ) {
-      const valueRef = useRef(defaultValue || "");
-      const [value, setValue] = useState(defaultValue || "");
-      useImperativeHandle(ref, () => ({
-        getMarkdown: () => valueRef.current,
-        clearContent: () => {
-          valueRef.current = "";
-          setValue("");
-        },
-        focus: () => {},
-        uploadFile: () => {},
-      }));
-      return (
-        <textarea
-          value={value}
-          onChange={(e) => {
-            valueRef.current = e.target.value;
-            setValue(e.target.value);
-            onUpdate?.(e.target.value);
-          }}
-          placeholder={placeholder}
-          data-testid="rich-text-editor"
-        />
-      );
-    }),
-    TitleEditor: forwardRef(function MockTitleEditor(
-      { defaultValue, placeholder, onBlur, onChange }: any,
-      ref: any,
-    ) {
-      const valueRef = useRef(defaultValue || "");
-      const [value, setValue] = useState(defaultValue || "");
-      useImperativeHandle(ref, () => ({
-        getText: () => valueRef.current,
-        focus: () => {},
-      }));
-      return (
-        <input
-          value={value}
-          onChange={(e) => {
-            valueRef.current = e.target.value;
-            setValue(e.target.value);
-            onChange?.(e.target.value);
-          }}
-          onBlur={() => onBlur?.(valueRef.current)}
-          placeholder={placeholder}
-          data-testid="title-editor"
-        />
-      );
-    }),
-    // Pass-through provider so comment-card's AttachmentList can render with
-    // attachment download wiring without hitting the real context singleton.
-    AttachmentDownloadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  };
-});
+vi.mock("../../editor", () => ({
+  useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
+  FileDropOverlay: () => null,
+  // No-op so comment-card's AttachmentList can render without hitting the
+  // real API singleton; tests that care about download wiring should write
+  // dedicated specs against `use-download-attachment.test.tsx`.
+  useDownloadAttachment: () => mockDownloadAttachment,
+  // Inert preview hook — comment-card's AttachmentList uses it to gate the
+  // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
+  useAttachmentPreview: () => ({
+    open: vi.fn(),
+    tryOpen: () => false,
+    modal: null,
+  }),
+  isPreviewable: () => false,
+  ReadonlyContent: ({ content }: { content: string }) => (
+    <div data-testid="readonly-content">{content}</div>
+  ),
+  ContentEditor: forwardRef(function MockContentEditor(
+    { defaultValue, onUpdate, placeholder }: any,
+    ref: any,
+  ) {
+    const valueRef = useRef(defaultValue || "");
+    const [value, setValue] = useState(defaultValue || "");
+    useImperativeHandle(ref, () => ({
+      getMarkdown: () => valueRef.current,
+      clearContent: () => { valueRef.current = ""; setValue(""); },
+      focus: () => {},
+      uploadFile: () => {},
+    }));
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => {
+          valueRef.current = e.target.value;
+          setValue(e.target.value);
+          onUpdate?.(e.target.value);
+        }}
+        placeholder={placeholder}
+        data-testid="rich-text-editor"
+      />
+    );
+  }),
+  TitleEditor: forwardRef(function MockTitleEditor(
+    { defaultValue, placeholder, onBlur, onChange }: any,
+    ref: any,
+  ) {
+    const valueRef = useRef(defaultValue || "");
+    const [value, setValue] = useState(defaultValue || "");
+    useImperativeHandle(ref, () => ({
+      getText: () => valueRef.current,
+      focus: () => {},
+    }));
+    return (
+      <input
+        value={value}
+        onChange={(e) => {
+          valueRef.current = e.target.value;
+          setValue(e.target.value);
+          onChange?.(e.target.value);
+        }}
+        onBlur={() => onBlur?.(valueRef.current)}
+        placeholder={placeholder}
+        data-testid="title-editor"
+      />
+    );
+  }),
+}));
 
 // Mock common components
 vi.mock("../../common/actor-avatar", () => ({
@@ -850,6 +841,28 @@ describe("IssueDetail (shared)", () => {
             size_bytes: 512,
             created_at: "2026-01-18T00:05:00Z",
           },
+          {
+            id: "att-image-1",
+            workspace_id: "ws-1",
+            issue_id: "issue-1",
+            comment_id: "comment-4",
+            chat_session_id: null,
+            chat_message_id: null,
+            uploader_type: "member",
+            uploader_id: "user-1",
+            filename: "error-screenshot-duplicate.png",
+            url: "https://cdn.example.com/error-screenshot-duplicate.png",
+            download_url: "https://cdn.example.com/error-screenshot-duplicate.png?sig=2",
+            content_type: "image/png",
+            size_bytes: 1024,
+            created_at: "2026-01-18T00:05:00Z",
+          },
+          {
+            id: "att-malformed-1",
+            filename: "unknown.bin",
+            url: "https://cdn.example.com/unknown.bin",
+            download_url: "https://cdn.example.com/unknown.bin?sig=1",
+          } as Attachment,
         ],
       },
     ] as TimelineEntry[]);
@@ -862,10 +875,15 @@ describe("IssueDetail (shared)", () => {
 
     expect(screen.getByText("Images from comments")).toBeInTheDocument();
     expect(screen.getByText("Other attachments from comments")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "error-screenshot.png" }))
-      .toHaveAttribute("href", "https://cdn.example.com/error-screenshot.png?sig=1");
-    expect(screen.getByRole("link", { name: "logs.txt" }))
-      .toHaveAttribute("href", "https://cdn.example.com/logs.txt?sig=1");
+      expect(screen.getAllByRole("button", { name: "error-screenshot.png" })).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "error-screenshot.png" }));
+      fireEvent.click(screen.getByRole("button", { name: "logs.txt" }));
+      fireEvent.click(screen.getByRole("button", { name: "unknown.bin" }));
+
+      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-image-1");
+      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-doc-1");
+      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-malformed-1");
   });
 
   it("shows 'not found' message when issue does not exist", async () => {
