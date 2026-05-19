@@ -126,6 +126,8 @@ export function ManualCreatePanel({
   const [projectId, setProjectId] = useState<string | undefined>(
     (data?.project_id as string) || undefined,
   );
+  // Manual mode intentionally has no sandbox toggle; it preserves the current
+  // quick-create sandbox preference and forwards it when switching back.
   const [useSandbox] = useState<boolean>(() => {
     if (typeof data?.use_sandbox === "boolean") return data.use_sandbox;
     return persistedUseSandbox;
