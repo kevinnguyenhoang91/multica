@@ -59,6 +59,7 @@ vi.mock("@multica/ui/components/ui/sidebar", () => ({
   ),
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SidebarRail: () => null,
+  SidebarTrigger: () => <button data-testid="sidebar-trigger" type="button" />,
 }));
 vi.mock("@multica/ui/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -192,5 +193,10 @@ describe("PinRow", () => {
       "true",
     );
     expect(container.querySelector('button[data-href="/acme/issues"]')).not.toHaveAttribute("data-active");
+  });
+
+  it("renders sidebar header trigger", () => {
+    render(<AppSidebar />);
+    expect(screen.getByTestId("sidebar-trigger")).toBeInTheDocument();
   });
 });
