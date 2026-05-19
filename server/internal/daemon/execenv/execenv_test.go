@@ -1924,33 +1924,6 @@ func TestPrepareCodexHomeEnsuresNetworkAccess(t *testing.T) {
 	}
 }
 
-func TestPrepareCodexHomeWithOptsSandboxDisabled(t *testing.T) {
-	// Cannot use t.Parallel() with t.Setenv.
-	sharedHome := t.TempDir()
-	t.Setenv("CODEX_HOME", sharedHome)
-
-	codexHome := filepath.Join(t.TempDir(), "codex-home")
-	useSandbox := false
-	if err := prepareCodexHomeWithOpts(codexHome, CodexHomeOptions{
-		GOOS:       "linux",
-		UseSandbox: &useSandbox,
-	}, testLogger()); err != nil {
-		t.Fatalf("prepareCodexHomeWithOpts failed: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
-	if err != nil {
-		t.Fatalf("config.toml not created: %v", err)
-	}
-	s := string(data)
-	if !strings.Contains(s, `sandbox_mode = "danger-full-access"`) {
-		t.Errorf("config.toml missing danger-full-access mode when sandbox disabled:\n%s", s)
-	}
-	if strings.Contains(s, "sandbox_workspace_write.network_access") {
-		t.Errorf("config.toml should not contain workspace-write network access when sandbox disabled:\n%s", s)
-	}
-}
-
 func TestReuseRestoresCodexHome(t *testing.T) {
 	// Cannot use t.Parallel() with t.Setenv.
 

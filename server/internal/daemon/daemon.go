@@ -2219,13 +2219,6 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		QuickCreatePrompt:       task.QuickCreatePrompt,
 		IsSquadLeader:           strings.Contains(instructions, "## Squad Operating Protocol"),
 	}
-	if task.QuickCreatePrompt != "" {
-		useSandbox := true
-		if task.UseSandbox != nil {
-			useSandbox = *task.UseSandbox
-		}
-		taskCtx.UseSandbox = &useSandbox
-	}
 
 	// Mark candidate env roots as active before any env work so the GC loop
 	// can't reclaim artifacts inside them mid-execution. We mark both the

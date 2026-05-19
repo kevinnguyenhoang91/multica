@@ -41,9 +41,6 @@ type CodexHomeOptions struct {
 	// Empty means use runtime.GOOS. Primarily exists so tests can exercise
 	// both macOS and Linux paths deterministically.
 	GOOS string
-	// UseSandbox optionally overrides the default sandbox policy. nil keeps
-	// the daemon-managed default behavior; false forces danger-full-access.
-	UseSandbox *bool
 }
 
 // prepareCodexHome is a thin wrapper around prepareCodexHomeWithOpts kept for
@@ -112,15 +109,10 @@ func prepareCodexHomeWithOpts(codexHome string, opts CodexHomeOptions, logger *s
 		logger.Warn("execenv: codex-home plugin cache exposure failed", "error", err)
 	}
 
-	// Write a daemon-managed sandbox block into config.toml.
+	// Write a daemon-managed sandbox block into config.toml. On macOS we may
+	// need to fall back to danger-full-access because of openai/codex#10390;
+	// see codex_sandbox.go for the full rationale.
 	policy := codexSandboxPolicyFor(opts.GOOS, opts.CodexVersion)
-	if opts.UseSandbox != nil && !*opts.UseSandbox {
-		policy = codexSandboxPolicy{
-			Mode:          "danger-full-access",
-			NetworkAccess: true,
-			Reason:        "sandbox disabled by quick-create toggle",
-		}
-	}
 	if err := ensureCodexSandboxConfig(filepath.Join(codexHome, "config.toml"), policy, opts.CodexVersion, logger); err != nil {
 		logger.Warn("execenv: codex-home ensure sandbox config failed", "error", err)
 	}

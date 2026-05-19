@@ -1267,11 +1267,10 @@ func (h *Handler) ChildIssueProgress(w http.ResponseWriter, r *http.Request) {
 // instead of letting it default. The frontend remembers the user's last
 // pick per workspace, so frequent users skip retyping "in project X".
 type QuickCreateIssueRequest struct {
-	AgentID    string `json:"agent_id,omitempty"`
-	SquadID    string `json:"squad_id,omitempty"`
-	Prompt     string `json:"prompt"`
-	ProjectID  string `json:"project_id,omitempty"`
-	UseSandbox *bool  `json:"use_sandbox,omitempty"`
+	AgentID   string `json:"agent_id,omitempty"`
+	SquadID   string `json:"squad_id,omitempty"`
+	Prompt    string `json:"prompt"`
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 // QuickCreateIssueResponse echoes the queued task id so the frontend can
@@ -1418,12 +1417,7 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 		projectUUID = pid
 	}
 
-	useSandbox := true
-	if req.UseSandbox != nil {
-		useSandbox = *req.UseSandbox
-	}
-
-	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, squadUUID, prompt, projectUUID, useSandbox)
+	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, squadUUID, prompt, projectUUID)
 	if err != nil {
 		slog.Warn("quick-create enqueue failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "failed to enqueue quick-create task")

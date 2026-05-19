@@ -129,7 +129,6 @@
     "switch_to_manual": "Switch to Manual",
     "switch_to_manual_tooltip": "Switch to manual create — fill the fields yourself",
     "create_another": "Create another",
-    "sandbox_toggle": "Enable sandboxing",
     "remove_parent_aria": "Remove parent",
     "remove_subissue_aria": "Remove sub-issue {{identifier}}",
     "subissue_of": "Sub-issue of {{identifier}}",

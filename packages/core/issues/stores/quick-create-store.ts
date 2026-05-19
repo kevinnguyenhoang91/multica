@@ -32,8 +32,6 @@ interface QuickCreateState {
   clearPrompt: () => void;
   keepOpen: boolean;
   setKeepOpen: (v: boolean) => void;
-  useSandbox: boolean;
-  setUseSandbox: (v: boolean) => void;
 }
 
 export const useQuickCreateStore = create<QuickCreateState>()(
@@ -49,8 +47,6 @@ export const useQuickCreateStore = create<QuickCreateState>()(
       clearPrompt: () => set({ prompt: "" }),
       keepOpen: false,
       setKeepOpen: (v) => set({ keepOpen: v }),
-      useSandbox: true,
-      setUseSandbox: (v) => set({ useSandbox: v }),
     }),
     {
       name: "multica_quick_create",
