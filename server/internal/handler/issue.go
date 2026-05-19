@@ -1763,12 +1763,11 @@ func (h *Handler) ChildIssueProgress(w http.ResponseWriter, r *http.Request) {
 // keeping the sub-issue intent of the entry point regardless of whether
 // the user submits via manual or agent mode.
 type QuickCreateIssueRequest struct {
-	AgentID       string   `json:"agent_id,omitempty"`
-	SquadID       string   `json:"squad_id,omitempty"`
-	Prompt        string   `json:"prompt"`
-	ProjectID     string   `json:"project_id,omitempty"`
-	ParentIssueID string   `json:"parent_issue_id,omitempty"`
-	AttachmentIDs []string `json:"attachment_ids,omitempty"`
+	AgentID    string `json:"agent_id,omitempty"`
+	SquadID    string `json:"squad_id,omitempty"`
+	Prompt     string `json:"prompt"`
+	ProjectID  string `json:"project_id,omitempty"`
+	UseSandbox *bool  `json:"use_sandbox,omitempty"`
 }
 
 // QuickCreateIssueResponse echoes the queued task id so the frontend can
@@ -1921,28 +1920,12 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 		projectUUID = pid
 	}
 
-	// Optional parent_issue_id — validate same-workspace membership just like
-	// the regular CreateIssue path. Frontend seeds this from the "Add sub
-	// issue" entry, but the handler re-checks so a forged request can't
-	// smuggle a foreign parent UUID through.
-	var parentIssueUUID pgtype.UUID
-	if strings.TrimSpace(req.ParentIssueID) != "" {
-		pid, ok := parseUUIDOrBadRequest(w, req.ParentIssueID, "parent_issue_id")
-		if !ok {
-			return
-		}
-		parent, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
-			ID:          pid,
-			WorkspaceID: wsUUID,
-		})
-		if err != nil || !parent.ID.Valid {
-			writeError(w, http.StatusBadRequest, "parent issue not found in this workspace")
-			return
-		}
-		parentIssueUUID = pid
+	useSandbox := true
+	if req.UseSandbox != nil {
+		useSandbox = *req.UseSandbox
 	}
 
-	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, squadUUID, prompt, projectUUID, parentIssueUUID, attachmentIDs)
+	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, squadUUID, prompt, projectUUID, useSandbox)
 	if err != nil {
 		slog.Warn("quick-create enqueue failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "failed to enqueue quick-create task")
