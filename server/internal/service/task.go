@@ -604,6 +604,8 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	if squadID.Valid {
 		payload.SquadID = util.UUIDToString(squadID)
 	}
+	// UseSandbox is always non-nil for tasks created via this enqueue path.
+	// Nil only appears on legacy tasks created before use_sandbox existed.
 	payload.UseSandbox = &useSandbox
 	contextJSON, err := json.Marshal(payload)
 	if err != nil {
