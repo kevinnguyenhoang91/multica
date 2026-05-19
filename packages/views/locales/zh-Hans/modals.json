@@ -131,6 +131,7 @@
     "switch_to_manual": "切换到手动",
     "switch_to_manual_tooltip": "切换到手动创建——自己填字段",
     "create_another": "继续创建",
+    "sandbox_toggle": "启用沙箱",
     "remove_parent_aria": "移除父级",
     "remove_subissue_aria": "移除子 issue {{identifier}}",
     "subissue_of": "{{identifier}} 的子 issue",

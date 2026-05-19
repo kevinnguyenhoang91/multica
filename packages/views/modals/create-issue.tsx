@@ -97,6 +97,7 @@ export function ManualCreatePanel({
   const setLastMode = useCreateModeStore((s) => s.setLastMode);
   const keepOpen = useQuickCreateStore((s) => s.keepOpen);
   const setKeepOpen = useQuickCreateStore((s) => s.setKeepOpen);
+  const persistedUseSandbox = useQuickCreateStore((s) => s.useSandbox);
 
   const [title, setTitle] = useState(draft.title);
   const [formResetKey, setFormResetKey] = useState(0);
@@ -124,6 +125,10 @@ export function ManualCreatePanel({
   const [projectId, setProjectId] = useState<string | undefined>(
     (data?.project_id as string) || undefined,
   );
+  const [useSandbox] = useState<boolean>(() => {
+    if (typeof data?.use_sandbox === "boolean") return data.use_sandbox;
+    return persistedUseSandbox;
+  });
   const [parentIssueId, setParentIssueId] = useState<string | undefined>(
     (data?.parent_issue_id as string) || undefined,
   );
@@ -363,6 +368,7 @@ export function ManualCreatePanel({
           ? { squad_id: assigneeId }
           : {}),
       ...(projectId ? { project_id: projectId } : {}),
+      use_sandbox: useSandbox,
     });
   };
 

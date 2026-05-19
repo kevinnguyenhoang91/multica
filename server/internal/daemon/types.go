@@ -33,12 +33,12 @@ type ProjectResourceData struct {
 // Task represents a claimed task from the server.
 // Agent data (name, skills) is populated by the claim endpoint.
 type Task struct {
-	ID                      string          `json:"id"`
-	AgentID                 string          `json:"agent_id"`
-	RuntimeID               string          `json:"runtime_id"`
-	IssueID                 string          `json:"issue_id"`
-	WorkspaceID             string          `json:"workspace_id"`
-	Agent                   *AgentData      `json:"agent,omitempty"`
+	ID                      string                `json:"id"`
+	AgentID                 string                `json:"agent_id"`
+	RuntimeID               string                `json:"runtime_id"`
+	IssueID                 string                `json:"issue_id"`
+	WorkspaceID             string                `json:"workspace_id"`
+	Agent                   *AgentData            `json:"agent,omitempty"`
 	Repos                   []RepoData            `json:"repos,omitempty"`
 	ProjectID               string                `json:"project_id,omitempty"`        // issue's project, when present
 	ProjectTitle            string                `json:"project_title,omitempty"`     // human-readable project title for context injection
@@ -59,6 +59,7 @@ type Task struct {
 	AutopilotSource         string          `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
 	AutopilotTriggerPayload json.RawMessage `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string          `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
+	UseSandbox              *bool           `json:"use_sandbox,omitempty"`               // quick-create sandbox toggle; nil on non-quick-create tasks
 	SquadID                 string          `json:"squad_id,omitempty"`                  // when the picker was a squad, the squad's UUID; Agent is still the resolved leader
 	SquadName               string          `json:"squad_name,omitempty"`                // display name for the picker squad, used in prompt text
 	// RequestingUserName + RequestingUserProfileDescription describe the human
