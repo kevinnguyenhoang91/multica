@@ -2,7 +2,7 @@ import { forwardRef, useRef, useState, useImperativeHandle } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Issue, TimelineEntry } from "@multica/core/types";
+import type { Attachment, Issue, TimelineEntry } from "@multica/core/types";
 import { I18nProvider } from "@multica/core/i18n/react";
 import enCommon from "../../locales/en/common.json";
 import enIssues from "../../locales/en/issues.json";
@@ -10,6 +10,7 @@ import enIssues from "../../locales/en/issues.json";
 const TEST_RESOURCES = { en: { common: enCommon, issues: enIssues } };
 
 const mockViewport = vi.hoisted(() => ({ isMobile: false }));
+const mockDownloadAttachment = vi.hoisted(() => vi.fn());
 
 vi.mock("@multica/ui/hooks/use-mobile", () => ({
   useIsMobile: () => mockViewport.isMobile,
@@ -116,7 +117,7 @@ vi.mock("../../editor", () => ({
   // No-op so comment-card's AttachmentList can render without hitting the
   // real API singleton; tests that care about download wiring should write
   // dedicated specs against `use-download-attachment.test.tsx`.
-  useDownloadAttachment: () => vi.fn(),
+  useDownloadAttachment: () => mockDownloadAttachment,
   // Inert preview hook — comment-card's AttachmentList uses it to gate the
   // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
   useAttachmentPreview: () => ({
@@ -496,6 +497,7 @@ function renderIssueDetailWithHighlight(
 describe("IssueDetail (shared)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDownloadAttachment.mockResolvedValue(undefined);
     mockViewport.isMobile = false;
     // Default: issue loads successfully
     mockApiObj.getIssue.mockResolvedValue(mockIssue);
@@ -780,6 +782,28 @@ describe("IssueDetail (shared)", () => {
             size_bytes: 512,
             created_at: "2026-01-18T00:05:00Z",
           },
+          {
+            id: "att-image-1",
+            workspace_id: "ws-1",
+            issue_id: "issue-1",
+            comment_id: "comment-4",
+            chat_session_id: null,
+            chat_message_id: null,
+            uploader_type: "member",
+            uploader_id: "user-1",
+            filename: "error-screenshot-duplicate.png",
+            url: "https://cdn.example.com/error-screenshot-duplicate.png",
+            download_url: "https://cdn.example.com/error-screenshot-duplicate.png?sig=2",
+            content_type: "image/png",
+            size_bytes: 1024,
+            created_at: "2026-01-18T00:05:00Z",
+          },
+          {
+            id: "att-malformed-1",
+            filename: "unknown.bin",
+            url: "https://cdn.example.com/unknown.bin",
+            download_url: "https://cdn.example.com/unknown.bin?sig=1",
+          } as Attachment,
         ],
       },
     ] as TimelineEntry[]);
@@ -792,10 +816,15 @@ describe("IssueDetail (shared)", () => {
 
     expect(screen.getByText("Images from comments")).toBeInTheDocument();
     expect(screen.getByText("Other attachments from comments")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "error-screenshot.png" }))
-      .toHaveAttribute("href", "https://cdn.example.com/error-screenshot.png?sig=1");
-    expect(screen.getByRole("link", { name: "logs.txt" }))
-      .toHaveAttribute("href", "https://cdn.example.com/logs.txt?sig=1");
+      expect(screen.getAllByRole("button", { name: "error-screenshot.png" })).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "error-screenshot.png" }));
+      fireEvent.click(screen.getByRole("button", { name: "logs.txt" }));
+      fireEvent.click(screen.getByRole("button", { name: "unknown.bin" }));
+
+      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-image-1");
+      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-doc-1");
+      expect(mockDownloadAttachment).toHaveBeenCalledWith("att-malformed-1");
   });
 
   it("shows 'not found' message when issue does not exist", async () => {
