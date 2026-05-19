@@ -25,6 +25,7 @@ const mockSetDraft = vi.hoisted(() => vi.fn());
 const mockClearDraft = vi.hoisted(() => vi.fn());
 const mockSetLastAssignee = vi.hoisted(() => vi.fn());
 const mockSetKeepOpen = vi.hoisted(() => vi.fn());
+const mockSetUseSandbox = vi.hoisted(() => vi.fn());
 const mockToastCustom = vi.hoisted(() => vi.fn());
 const mockToastDismiss = vi.hoisted(() => vi.fn());
 const mockToastError = vi.hoisted(() => vi.fn());
@@ -50,6 +51,8 @@ const mockDraftStore = {
 const mockQuickCreateStore = {
   keepOpen: false,
   setKeepOpen: mockSetKeepOpen,
+  useSandbox: true,
+  setUseSandbox: mockSetUseSandbox,
 };
 
 vi.mock("../navigation", () => ({
@@ -214,12 +217,14 @@ vi.mock("@multica/ui/components/ui/switch", () => ({
   Switch: ({
     checked,
     onCheckedChange,
+    "aria-label": ariaLabel,
   }: {
     checked: boolean;
     onCheckedChange: (v: boolean) => void;
+    "aria-label"?: string;
   }) => (
     <input
-      aria-label="Create another"
+      aria-label={ariaLabel ?? "Create another"}
       type="checkbox"
       checked={checked}
       onChange={(e) => onCheckedChange(e.target.checked)}
@@ -264,8 +269,12 @@ describe("CreateIssueModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockQuickCreateStore.keepOpen = false;
+    mockQuickCreateStore.useSandbox = true;
     mockSetKeepOpen.mockImplementation((v: boolean) => {
       mockQuickCreateStore.keepOpen = v;
+    });
+    mockSetUseSandbox.mockImplementation((v: boolean) => {
+      mockQuickCreateStore.useSandbox = v;
     });
     // Reset the shared draft mock so per-test assignee seeding (squad / agent)
     // doesn't leak into the next test in the suite.
@@ -392,7 +401,7 @@ describe("CreateIssueModal", () => {
     expect(onSwitchMode).toHaveBeenCalledTimes(1);
     const carry = onSwitchMode.mock.calls[0]?.[0];
     expect(carry).toEqual(
-      expect.objectContaining({ prompt: "Refactor auth", squad_id: "squad-1" }),
+      expect.objectContaining({ prompt: "Refactor auth", squad_id: "squad-1", use_sandbox: true }),
     );
     expect(carry).not.toHaveProperty("agent_id");
   });
@@ -425,6 +434,35 @@ describe("CreateIssueModal", () => {
       expect.objectContaining({
         prompt: "Refactor auth",
         project_id: "proj-1",
+        use_sandbox: true,
+      }),
+    );
+  });
+
+  it("forwards use_sandbox from agent mode when switching back to agent", async () => {
+    const user = userEvent.setup();
+    const onSwitchMode = vi.fn();
+
+    renderModal(
+      <ManualCreatePanel
+        onClose={vi.fn()}
+        onSwitchMode={onSwitchMode}
+        data={{ use_sandbox: false }}
+        isExpanded={false}
+        setIsExpanded={vi.fn()}
+        backlogHintIssueId={null}
+        setBacklogHintIssueId={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Issue title"), "Refactor auth");
+    await user.click(screen.getByRole("button", { name: /Switch to Agent/i }));
+
+    expect(onSwitchMode).toHaveBeenCalledTimes(1);
+    expect(onSwitchMode.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        prompt: "Refactor auth",
+        use_sandbox: false,
       }),
     );
   });
