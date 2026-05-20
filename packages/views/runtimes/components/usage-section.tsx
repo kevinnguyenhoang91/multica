@@ -625,7 +625,10 @@ function CostByBlock({
 
   const wsId = useWorkspaceId();
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  const { data: squads = [] } = useQuery({
+    ...squadListOptions(wsId),
+    enabled: tab === "squad",
+  });
 
   const byAgent = useMemo(
     () => aggregateCostByAgent(byAgentRows),

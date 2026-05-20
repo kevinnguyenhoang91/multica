@@ -277,13 +277,15 @@ JOIN squad s ON s.id = sm.squad_id
 WHERE atq.runtime_id = $1
   AND tu.created_at >= $2::timestamptz
   AND s.archived_at IS NULL
+  AND s.workspace_id = $3::uuid
 GROUP BY sm.squad_id, tu.model
 ORDER BY sm.squad_id, tu.model
 `
 
 type ListRuntimeUsageBySquadParams struct {
-	RuntimeID pgtype.UUID        `json:"runtime_id"`
-	Since     pgtype.Timestamptz `json:"since"`
+	RuntimeID   pgtype.UUID        `json:"runtime_id"`
+	Since       pgtype.Timestamptz `json:"since"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 }
 
 type ListRuntimeUsageBySquadRow struct {
@@ -300,7 +302,7 @@ type ListRuntimeUsageBySquadRow struct {
 // folds task usage through agent squad memberships so the runtime-detail
 // "Cost by squad" tab can mirror the existing by-agent view.
 func (q *Queries) ListRuntimeUsageBySquad(ctx context.Context, arg ListRuntimeUsageBySquadParams) ([]ListRuntimeUsageBySquadRow, error) {
-	rows, err := q.db.Query(ctx, listRuntimeUsageBySquad, arg.RuntimeID, arg.Since)
+	rows, err := q.db.Query(ctx, listRuntimeUsageBySquad, arg.RuntimeID, arg.Since, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
