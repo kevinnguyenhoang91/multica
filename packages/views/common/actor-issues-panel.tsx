@@ -31,7 +31,28 @@ import { useT } from "../i18n";
 
 export type TaskActorType = "member" | "agent";
 
-const SCOPE_VALUES: ActorIssuesScope[] = ["assigned", "created"];
+export function getScopeValues(actorType: TaskActorType): ActorIssuesScope[] {
+  return actorType === "agent"
+    ? ["assigned", "participated"]
+    : ["assigned", "created"];
+}
+
+export function normalizeActorScope(
+  scope: ActorIssuesScope,
+  actorType: TaskActorType,
+): ActorIssuesScope {
+  const allowed = getScopeValues(actorType);
+  return allowed.includes(scope) ? scope : "assigned";
+}
+
+export function toActorIssuesFilter(
+  scope: ActorIssuesScope,
+  actorId: string,
+): MyIssuesFilter {
+  if (scope === "assigned") return { assignee_id: actorId };
+  if (scope === "created") return { creator_id: actorId };
+  return { participated_agent_id: actorId };
+}
 
 export function ActorIssuesPanel({
   actorType,
@@ -68,14 +89,22 @@ export function ActorIssuesPanel({
     useIssueSelectionStore.getState().clear();
   }, [scope, actorType, actorId]);
 
-  const queryFilter: MyIssuesFilter = useMemo(
-    () =>
-      scope === "assigned"
-        ? { assignee_id: actorId }
-        : { creator_id: actorId },
-    [scope, actorId],
+  const scopeValues = useMemo(() => getScopeValues(actorType), [actorType]);
+  const effectiveScope = useMemo(
+    () => normalizeActorScope(scope, actorType),
+    [scope, actorType],
   );
-  const queryScope = `${actorType}:${actorId}:${scope}`;
+  useEffect(() => {
+    if (scope !== effectiveScope) {
+      setScope("assigned");
+    }
+  }, [scope, effectiveScope, setScope]);
+
+  const queryFilter: MyIssuesFilter = useMemo(
+    () => toActorIssuesFilter(effectiveScope, actorId),
+    [effectiveScope, actorId],
+  );
+  const queryScope = `${actorType}:${actorId}:${effectiveScope}`;
 
   const rawIssuesQuery = useQuery(myIssueListOptions(wsId, queryScope, queryFilter));
   const rawIssues = useMemo(
@@ -87,11 +116,13 @@ export function ActorIssuesPanel({
   const actorIssues = useMemo(
     () =>
       rawIssues.filter((issue) =>
-        scope === "assigned"
+        effectiveScope === "assigned"
           ? issue.assignee_type === actorType && issue.assignee_id === actorId
-          : issue.creator_type === actorType && issue.creator_id === actorId,
+          : effectiveScope === "created"
+            ? issue.creator_type === actorType && issue.creator_id === actorId
+            : true,
       ),
-    [actorId, actorType, rawIssues, scope],
+    [actorId, actorType, effectiveScope, rawIssues],
   );
 
   const filteredIssues = useMemo(
@@ -162,7 +193,7 @@ export function ActorIssuesPanel({
               />
             </div>
             <div className="flex items-center gap-1">
-              {SCOPE_VALUES.map((value) => (
+              {scopeValues.map((value) => (
                 <Tooltip key={value}>
                   <TooltipTrigger
                     render={
@@ -170,7 +201,7 @@ export function ActorIssuesPanel({
                         variant="outline"
                         size="sm"
                         className={
-                          scope === value
+                          effectiveScope === value
                             ? "bg-accent text-accent-foreground hover:bg-accent/80"
                             : "text-muted-foreground"
                         }
@@ -194,10 +225,10 @@ export function ActorIssuesPanel({
           <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm">
-              {t(($) => $.actor_issues.empty[scope].title)}
+              {t(($) => $.actor_issues.empty[effectiveScope].title)}
             </p>
             <p className="text-xs">
-              {t(($) => $.actor_issues.empty[scope].description)}
+              {t(($) => $.actor_issues.empty[effectiveScope].description)}
             </p>
           </div>
         ) : search.trim() !== "" && issues.length === 0 ? (
