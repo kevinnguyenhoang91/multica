@@ -373,6 +373,19 @@ export interface RuntimeUsageByAgent {
   task_count: number;
 }
 
+// One (squad, model) row of the "Cost by squad" tab on the runtime detail
+// page. Same pricing contract as by-agent: the client groups by squad_id and
+// sums cost across models.
+export interface RuntimeUsageBySquad {
+  squad_id: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  task_count: number;
+}
+
 // One (hour, model) row for the "By hour" tab; hour ∈ 0..23. Hours with
 // zero activity are omitted by the server; the client fills the gap to
 // render a continuous axis. Model preserved for client-side cost math.

@@ -580,6 +580,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Patch("/", h.UpdateAgentRuntime)
 					r.Get("/usage", h.GetRuntimeUsage)
 					r.Get("/usage/by-agent", h.GetRuntimeUsageByAgent)
+					r.Get("/usage/by-squad", h.GetRuntimeUsageBySquad)
 					r.Get("/usage/by-hour", h.GetRuntimeUsageByHour)
 					r.Get("/activity", h.GetRuntimeTaskActivity)
 					r.Post("/update", h.InitiateUpdate)

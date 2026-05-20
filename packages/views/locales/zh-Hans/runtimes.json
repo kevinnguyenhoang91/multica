@@ -267,10 +267,13 @@
       "save": "保存"
     },
     "cost_by_title_agent": "按智能体分摊",
+    "cost_by_title_squad": "按小队分摊",
     "cost_by_title_model": "按模型分摊",
     "cost_by_tab_agent": "按智能体",
+    "cost_by_tab_squad": "按小队",
     "cost_by_tab_model": "按模型",
     "cost_by_caption_agent_other": "{{count}} 个智能体使用此运行时",
+    "cost_by_caption_squad_other": "{{count}} 个小队使用此运行时 · 若智能体属于多个小队，则会在每个小队中重复计入",
     "cost_by_caption_model_other": "{{count}} 个模型已使用",
     "daily_breakdown_toggle": "每日明细表",
     "table_date": "日期",

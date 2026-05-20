@@ -57,6 +57,31 @@ WHERE atq.runtime_id = $1
 GROUP BY atq.agent_id, tu.model
 ORDER BY atq.agent_id, tu.model;
 
+-- name: ListRuntimeUsageBySquad :many
+-- Per-(squad, model) token aggregates for a runtime since a cutoff. This
+-- folds task usage through agent squad memberships so the runtime-detail
+-- "Cost by squad" tab can mirror the existing by-agent view.
+SELECT
+    sm.squad_id,
+    tu.model,
+    SUM(tu.input_tokens)::bigint AS input_tokens,
+    SUM(tu.output_tokens)::bigint AS output_tokens,
+    SUM(tu.cache_read_tokens)::bigint AS cache_read_tokens,
+    SUM(tu.cache_write_tokens)::bigint AS cache_write_tokens,
+    COUNT(DISTINCT tu.task_id)::int AS task_count
+FROM task_usage tu
+JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN squad_member sm
+  ON sm.member_type = 'agent'
+ AND sm.member_id = atq.agent_id
+JOIN squad s ON s.id = sm.squad_id
+WHERE atq.runtime_id = $1
+  AND tu.created_at >= @since::timestamptz
+  AND s.archived_at IS NULL
+  AND s.workspace_id = @workspace_id::uuid
+GROUP BY sm.squad_id, tu.model
+ORDER BY sm.squad_id, tu.model;
+
 -- name: GetRuntimeUsageByHour :many
 -- Per-(hour, model) token aggregates (hour ∈ 0..23) for a runtime since a
 -- cutoff. Powers the "By hour" tab — shows when in the day this runtime is
