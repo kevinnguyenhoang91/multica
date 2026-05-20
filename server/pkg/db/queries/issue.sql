@@ -16,6 +16,14 @@ WHERE i.workspace_id = $1
   AND (sqlc.narg('assignee_ids')::uuid[] IS NULL OR i.assignee_id = ANY(sqlc.narg('assignee_ids')::uuid[]))
   AND (sqlc.narg('creator_id')::uuid IS NULL OR i.creator_id = sqlc.narg('creator_id'))
   AND (sqlc.narg('project_id')::uuid IS NULL OR i.project_id = sqlc.narg('project_id'))
+  AND (sqlc.narg('participated_agent_id')::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = sqlc.narg('participated_agent_id')::uuid
+       ))
   AND (sqlc.narg('scheduled')::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
   AND (sqlc.narg('metadata_filter')::jsonb IS NULL OR i.metadata @> sqlc.narg('metadata_filter')::jsonb)
   AND (
@@ -186,6 +194,14 @@ WHERE i.workspace_id = $1
              AND a.owner_id     = sqlc.narg('involves_user_id')::uuid
     ))
   )
+  AND (sqlc.narg('participated_agent_id')::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = sqlc.narg('participated_agent_id')::uuid
+       ))
 ORDER BY i.position ASC, i.created_at DESC;
 
 -- name: CountIssues :one
@@ -198,6 +214,14 @@ WHERE i.workspace_id = $1
   AND (sqlc.narg('assignee_ids')::uuid[] IS NULL OR i.assignee_id = ANY(sqlc.narg('assignee_ids')::uuid[]))
   AND (sqlc.narg('creator_id')::uuid IS NULL OR i.creator_id = sqlc.narg('creator_id'))
   AND (sqlc.narg('project_id')::uuid IS NULL OR i.project_id = sqlc.narg('project_id'))
+  AND (sqlc.narg('participated_agent_id')::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = sqlc.narg('participated_agent_id')::uuid
+       ))
   AND (sqlc.narg('scheduled')::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
   AND (sqlc.narg('metadata_filter')::jsonb IS NULL OR i.metadata @> sqlc.narg('metadata_filter')::jsonb)
   AND (
