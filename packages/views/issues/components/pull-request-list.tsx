@@ -27,9 +27,28 @@ import type {
   GitHubPullRequestState,
 } from "@multica/core/types";
 import { cn } from "@multica/ui/lib/utils";
+import { LinkIcon } from "lucide-react";
 import { useT } from "../../i18n";
 
 type IssuesT = ReturnType<typeof useT<"issues">>["t"];
+
+function normalizeCommentPrUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host.toLowerCase()}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return url;
+  }
+}
+
+function displayCommentPrUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return url;
+  }
+}
 
 // Keep the existing sidebar density: show the first 3 PR rows inline, then
 // collapse the rest once the section reaches 4 rows.
@@ -54,16 +73,24 @@ const CHECKS_ICON: Record<
   pending: { icon: CircleDashed, className: "text-amber-600 dark:text-amber-400" },
 };
 
-export function PullRequestList({ issueId }: { issueId: string }) {
+export function PullRequestList({ issueId, commentPullRequestUrls }: { issueId: string; commentPullRequestUrls?: string[] }) {
   const { t } = useT("issues");
   const [expanded, setExpanded] = useState(false);
   const { data, isLoading } = useQuery(issuePullRequestsOptions(issueId));
-  const prs = data?.pull_requests ?? [];
+  const linkedPrs = data?.pull_requests ?? [];
+
+  // Merge comment-derived PR URLs that aren't already in the linked PR list.
+  const linkedUrls = new Set(linkedPrs.map((pr) => normalizeCommentPrUrl(pr.html_url)));
+  const extraCommentUrls = (commentPullRequestUrls ?? []).filter(
+    (url) => !linkedUrls.has(normalizeCommentPrUrl(url)),
+  );
+
+  const prs = linkedPrs;
 
   if (isLoading) {
     return <p className="text-xs text-muted-foreground px-2">{t(($) => $.detail.pull_requests_loading)}</p>;
   }
-  if (prs.length === 0) {
+  if (prs.length === 0 && extraCommentUrls.length === 0) {
     return (
       <p className="text-xs text-muted-foreground px-2">
         {t(($) => $.detail.pull_requests_empty)}
@@ -100,6 +127,9 @@ export function PullRequestList({ issueId }: { issueId: string }) {
           </button>
         </div>
       ) : null}
+      {extraCommentUrls.map((url) => (
+        <CommentPullRequestRow key={url} url={url} />
+      ))}
     </div>
   );
 }
@@ -162,6 +192,21 @@ function PullRequestRow({ pr }: { pr: GitHubPullRequest }) {
           statusKind={kind}
         />
       </div>
+    </a>
+  );
+}
+
+function CommentPullRequestRow({ url }: { url: string }) {
+  return (
+    <a
+      data-testid="comment-pull-request-row"
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
+    >
+      <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate group-hover:text-foreground">{displayCommentPrUrl(url)}</span>
     </a>
   );
 }
