@@ -477,6 +477,7 @@ export class ApiClient {
     if (params?.assignee_ids?.length) search.set("assignee_ids", params.assignee_ids.join(","));
     if (params?.creator_id) search.set("creator_id", params.creator_id);
     if (params?.project_id) search.set("project_id", params.project_id);
+    if (params?.participated_agent_id) search.set("participated_agent_id", params.participated_agent_id);
     if (params?.involves_user_id) search.set("involves_user_id", params.involves_user_id);
     if (params?.open_only) search.set("open_only", "true");
     if (params?.scheduled) search.set("scheduled", "true");
@@ -499,6 +500,7 @@ export class ApiClient {
     if (params.assignee_ids?.length) search.set("assignee_ids", params.assignee_ids.join(","));
     if (params.creator_id) search.set("creator_id", params.creator_id);
     if (params.project_id) search.set("project_id", params.project_id);
+    if (params.participated_agent_id) search.set("participated_agent_id", params.participated_agent_id);
     if (params.involves_user_id) search.set("involves_user_id", params.involves_user_id);
     if (params.assignee_filters?.length) {
       search.set("assignee_filters", params.assignee_filters.map((f) => `${f.type}:${f.id}`).join(","));
