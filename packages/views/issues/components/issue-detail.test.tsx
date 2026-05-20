@@ -126,6 +126,14 @@ vi.mock("../../editor", () => ({
     modal: null,
   }),
   isPreviewable: () => false,
+  // Pass-through provider so comment-card renders correctly in tests without
+  // hitting the real download singleton.
+  AttachmentDownloadProvider: ({ children }: { children: React.ReactNode }) => children,
+  // Minimal stub so comment-card's AttachmentList renders without the real
+  // Tiptap/attachment viewer stack.
+  Attachment: ({ attachment }: { attachment: any }) => (
+    <div data-testid="attachment-stub">{attachment?.attachment?.filename ?? "attachment"}</div>
+  ),
   ReadonlyContent: ({ content }: { content: string }) => (
     <div data-testid="readonly-content">{content}</div>
   ),
@@ -1065,5 +1073,46 @@ describe("IssueDetail (shared)", () => {
         expect.objectContaining({ description: "" }),
       );
     });
+  });
+
+  // Regression: rebase-conflict resolution accidentally duplicated the Pull
+  // requests block in issue-detail.tsx (KHA-43). The properties pane must
+  // render exactly one "Pull requests" section header regardless of how many
+  // times the component mounts or re-renders.
+  it("renders Pull requests section exactly once in the properties pane", async () => {
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Add JWT auth to the backend")).toBeInTheDocument();
+    });
+
+    // There must be exactly one "Pull requests" toggle button in the pane.
+    const prButtons = screen.getAllByRole("button", { name: /^Pull requests$/i });
+    expect(prButtons).toHaveLength(1);
+  });
+
+  it("renders Pull requests section exactly once after re-render (rebase-conflict regression)", async () => {
+    const { rerender } = renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Add JWT auth to the backend")).toBeInTheDocument();
+    });
+
+    // Simulate a re-render as would happen after resolving a rebase conflict
+    // and hot-reloading, or after an issue update triggers a re-render.
+    rerender(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <IssueDetail issueId="issue-1" />
+        </QueryClientProvider>
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Add JWT auth to the backend")).toBeInTheDocument();
+    });
+
+    const prButtons = screen.getAllByRole("button", { name: /^Pull requests$/i });
+    expect(prButtons).toHaveLength(1);
   });
 });
