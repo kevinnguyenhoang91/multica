@@ -2398,8 +2398,7 @@ func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
 				"issue_id", uuidToString(issue.ID),
 				"agent_id", uuidToString(issue.AssigneeID),
 				"error", err)
-		}
-		if err == nil && !hasPending {
+		} else if !hasPending {
 			h.TaskService.EnqueueTaskForIssue(ctx, issue)
 		}
 	}

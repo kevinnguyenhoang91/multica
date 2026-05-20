@@ -1600,7 +1600,11 @@ func TestUpdateIssueInReviewTransitionNotifiesSquadLeader(t *testing.T) {
 	`, testWorkspaceID, "InReview Notify Squad", leaderID, testUserID).Scan(&squadID); err != nil {
 		t.Fatalf("create squad: %v", err)
 	}
-	defer testPool.Exec(ctx, `DELETE FROM squad WHERE id = $1`, squadID)
+	t.Cleanup(func() {
+		if _, err := testPool.Exec(ctx, `DELETE FROM squad WHERE id = $1`, squadID); err != nil {
+			t.Fatalf("delete squad: %v", err)
+		}
+	})
 
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
