@@ -181,7 +181,7 @@ export const BoardCardContent = memo(function BoardCardContent({
                   priority={issue.priority}
                   onUpdate={handleUpdate}
                   trigger={
-                    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+                    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
                       <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
                       {t(($) => $.priority[issue.priority])}
                     </span>
@@ -189,7 +189,7 @@ export const BoardCardContent = memo(function BoardCardContent({
                 />
               </PickerWrapper>
             ) : (
-              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
                 <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
                 {priorityCfg.label}
               </span>
