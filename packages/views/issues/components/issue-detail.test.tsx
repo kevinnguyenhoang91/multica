@@ -694,7 +694,7 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getByText("Updated")).toBeInTheDocument();
   });
 
-  it("renders comment-derived links in sidebar with PR links split from other URLs", async () => {
+  it("renders comment-derived links in Attachments and no Resources section", async () => {
     mockApiObj.listTimeline.mockResolvedValue([
       ...mockTimeline,
       {
@@ -724,14 +724,16 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Resources")).toBeInTheDocument();
+      expect(screen.getByText("Attachments")).toBeInTheDocument();
     });
 
     // The PR link from comments is now folded into the Pull requests section,
-    // not shown as a subgroup inside Resources.
+    // not shown as a subgroup inside Attachments.
     expect(screen.queryByText("Pull requests from comments")).not.toBeInTheDocument();
     expect(screen.queryByText("Other links from comments")).not.toBeInTheDocument();
-    // The non-PR link should appear in Resources.
+    expect(screen.queryByText("Resources")).not.toBeInTheDocument();
+    expect(screen.getByText("Links from comments")).toBeInTheDocument();
+    // The non-PR link should appear in Attachments.
     expect(screen.getByRole("link", { name: "docs.example.com/spec" }))
       .toHaveAttribute("href", "https://docs.example.com/spec");
     // The PR link from comments should be deduplicated (only one anchor for it).
