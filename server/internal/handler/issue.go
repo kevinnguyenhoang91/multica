@@ -2015,7 +2015,14 @@ type UpdateIssueRequest struct {
 }
 
 func shouldHandoffToCreatorOnInReviewTransition(prevIssue db.Issue, nextStatus pgtype.Text) bool {
-	return nextStatus.Valid && nextStatus.String == "in_review" && prevIssue.Status != "in_review"
+	if !nextStatus.Valid || nextStatus.String != "in_review" {
+		return false
+	}
+	if prevIssue.Status != "in_progress" {
+		return false
+	}
+	return prevIssue.AssigneeType.Valid &&
+		(prevIssue.AssigneeType.String == "agent" || prevIssue.AssigneeType.String == "squad")
 }
 
 func applyCreatorOwnershipHandoffOnInReviewTransition(params *db.UpdateIssueParams, prevIssue db.Issue) {
@@ -2173,8 +2180,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Any transition into in_review hands ownership back to the creator,
-	// regardless of whether assignee fields were explicitly provided.
+	// AI/squad assignments hand ownership back to the creator only when the
+	// issue transitions from in_progress -> in_review.
 	applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
 
 	// Validate the resulting (assignee_type, assignee_id) pair when the caller
@@ -2635,8 +2642,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Any transition into in_review hands ownership back to the creator,
-		// regardless of whether assignee fields were explicitly provided.
+		// AI/squad assignments hand ownership back to the creator only when
+		// the issue transitions from in_progress -> in_review.
 		applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
 
 		// Validate the resulting assignee pair when this batch update touches
