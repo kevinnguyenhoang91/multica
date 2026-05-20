@@ -2,6 +2,7 @@ import type {
   AgentRuntime,
   RuntimeUsage,
   RuntimeUsageByAgent,
+  RuntimeUsageBySquad,
 } from "@multica/core/types";
 import { getCustomPricing } from "@multica/core/runtimes/custom-pricing-store";
 
@@ -776,6 +777,26 @@ export function aggregateCostByAgent(rows: RuntimeUsageByAgent[]): CostByKey[] {
     map.set(r.agent_id, entry);
   }
   return Array.from(map.values()).toSorted((a, b) => b.cost - a.cost);
+}
+
+// Per-(squad, model) rows → per-squad totals. Mirrors by-agent so the
+// presentation can stay identical while grouping on squad membership.
+export function aggregateCostBySquad(rows: RuntimeUsageBySquad[]): CostByKey[] {
+  const map = new Map<string, CostByKey>();
+  for (const r of rows) {
+    const entry = map.get(r.squad_id) ?? {
+      key: r.squad_id,
+      tokens: 0,
+      cost: 0,
+      taskCount: 0,
+    };
+    entry.tokens +=
+      r.input_tokens + r.output_tokens + r.cache_read_tokens + r.cache_write_tokens;
+    entry.cost += estimateCost(r);
+    entry.taskCount += r.task_count;
+    map.set(r.squad_id, entry);
+  }
+  return [...map.values()].sort((a, b) => b.cost - a.cost);
 }
 
 // Per-(date, model) rows → per-model totals (the "By model" tab reuses the
