@@ -111,7 +111,7 @@ func registerSubscriberListeners(bus *events.Bus, queries *db.Queries) {
 
 // extractIssueFields normalizes an issue payload that may be either a
 // handler.IssueResponse struct (HTTP handler path) or a map[string]any
-// (autopilot service path) into a common shape.
+// (task/autopilot service path) into a common shape.
 func extractIssueFields(v any) (handler.IssueResponse, bool) {
 	if issue, ok := v.(handler.IssueResponse); ok {
 		return issue, true
@@ -123,6 +123,13 @@ func extractIssueFields(v any) (handler.IssueResponse, bool) {
 	issue := handler.IssueResponse{}
 	issue.ID, _ = m["id"].(string)
 	issue.WorkspaceID, _ = m["workspace_id"].(string)
+	issue.Title, _ = m["title"].(string)
+	issue.Status, _ = m["status"].(string)
+	issue.Priority, _ = m["priority"].(string)
+	issue.Identifier, _ = m["identifier"].(string)
+	if n, ok := m["number"].(int32); ok {
+		issue.Number = n
+	}
 	issue.CreatorType, _ = m["creator_type"].(string)
 	issue.CreatorID, _ = m["creator_id"].(string)
 	issue.AssigneeType, _ = m["assignee_type"].(*string)
