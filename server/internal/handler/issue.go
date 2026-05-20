@@ -2388,7 +2388,13 @@ func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
 		return
 	}
 	if h.isAgentAssigneeReady(ctx, issue) {
-		h.TaskService.EnqueueTaskForIssue(ctx, issue)
+		hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
+			IssueID: issue.ID,
+			AgentID: issue.AssigneeID,
+		})
+		if err == nil && !hasPending {
+			h.TaskService.EnqueueTaskForIssue(ctx, issue)
+		}
 	}
 	if h.isSquadLeaderReady(ctx, issue) {
 		h.enqueueSquadLeaderTask(ctx, issue, pgtype.UUID{}, actorType, actorID)
