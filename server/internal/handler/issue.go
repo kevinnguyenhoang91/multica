@@ -2038,12 +2038,13 @@ func shouldHandoffToCreatorOnInReviewTransition(prevIssue db.Issue, nextStatus p
 		(prevIssue.AssigneeType.String == "agent" || prevIssue.AssigneeType.String == "squad")
 }
 
-func applyCreatorOwnershipHandoffOnInReviewTransition(params *db.UpdateIssueParams, prevIssue db.Issue) {
+func applyCreatorOwnershipHandoffOnInReviewTransition(params *db.UpdateIssueParams, prevIssue db.Issue) bool {
 	if !shouldHandoffToCreatorOnInReviewTransition(prevIssue, params.Status) {
-		return
+		return false
 	}
 	params.AssigneeType = pgtype.Text{String: prevIssue.CreatorType, Valid: true}
 	params.AssigneeID = prevIssue.CreatorID
+	return true
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -2193,16 +2194,17 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// AI/squad assignments hand ownership back to the creator only when the
-	// issue transitions from in_progress -> in_review.
-	applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
+	// Any transition into in_review hands ownership back to the creator,
+	// regardless of whether assignee fields were explicitly provided.
+	derived := applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
 
 	// Validate the resulting (assignee_type, assignee_id) pair when the caller
-	// touches either field. Existing data on the issue is left alone if the
-	// caller is not changing it.
+	// explicitly touches either field OR when the in_review handoff derived a
+	// new assignee from the creator — the derived pair must be validated even
+	// though it was not present in the raw request JSON.
 	_, touchedType := rawFields["assignee_type"]
 	_, touchedID := rawFields["assignee_id"]
-	if touchedType || touchedID {
+	if touchedType || touchedID || derived {
 		if status, msg := h.validateAssigneePair(r.Context(), r, workspaceID, params.AssigneeType, params.AssigneeID); status != 0 {
 			writeError(w, status, msg)
 			return
@@ -2667,15 +2669,16 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// AI/squad assignments hand ownership back to the creator only when
-		// the issue transitions from in_progress -> in_review.
-		applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
+		// Any transition into in_review hands ownership back to the creator,
+		// regardless of whether assignee fields were explicitly provided.
+		derivedBatch := applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
 
 		// Validate the resulting assignee pair when this batch update touches
-		// either assignee field. Skip the issue silently on failure.
+		// either assignee field OR when the in_review handoff derived a new
+		// assignee from the creator. Skip the issue silently on failure.
 		_, batchTouchedType := rawUpdates["assignee_type"]
 		_, batchTouchedID := rawUpdates["assignee_id"]
-		if batchTouchedType || batchTouchedID {
+		if batchTouchedType || batchTouchedID || derivedBatch {
 			if status, _ := h.validateAssigneePair(r.Context(), r, workspaceID, params.AssigneeType, params.AssigneeID); status != 0 {
 				continue
 			}
