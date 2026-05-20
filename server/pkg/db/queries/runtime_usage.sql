@@ -78,6 +78,7 @@ JOIN squad s ON s.id = sm.squad_id
 WHERE atq.runtime_id = $1
   AND tu.created_at >= @since::timestamptz
   AND s.archived_at IS NULL
+  AND s.workspace_id = @workspace_id::uuid
 GROUP BY sm.squad_id, tu.model
 ORDER BY sm.squad_id, tu.model;
 
