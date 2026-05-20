@@ -1046,7 +1046,10 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 
 const advanceIssueToInReviewOnTaskCompletion = `-- name: AdvanceIssueToInReviewOnTaskCompletion :one
 UPDATE issue
-SET status = 'in_review', updated_at = now()
+SET status = 'in_review',
+    assignee_type = creator_type,
+    assignee_id = creator_id,
+    updated_at = now()
 WHERE id = $1
   AND status = 'in_progress'
   AND assignee_type IN ('agent', 'squad')
@@ -1059,7 +1062,8 @@ RETURNING id, workspace_id, title, description, status, priority, assignee_type,
 `
 
 // AdvanceIssueToInReviewOnTaskCompletion advances an issue from in_progress to
-// in_review atomically when all SQL guardrails pass:
+// in_review atomically, and hands ownership back to the issue creator, when all
+// SQL guardrails pass:
 //   - issue must be in_progress (terminal-state protection)
 //   - assignee must be agent or squad (assignee guardrail)
 //   - no queued/dispatched/running tasks remain (active-task gate)
@@ -1096,4 +1100,3 @@ func (q *Queries) AdvanceIssueToInReviewOnTaskCompletion(ctx context.Context, is
 	)
 	return i, err
 }
-
