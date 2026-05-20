@@ -19,6 +19,7 @@ import { projectListOptions } from "@multica/core/projects/queries";
 import { ProjectIcon } from "../../projects/components/project-icon";
 import { PriorityIcon } from "./priority-icon";
 import { PriorityPicker, AssigneePicker, StartDatePicker, DueDatePicker } from "./pickers";
+import { PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { useViewStore } from "@multica/core/issues/stores/view-store-context";
 import { ProgressRing } from "./progress-ring";
 import type { ChildProgress } from "./list-row";
@@ -70,6 +71,8 @@ export const BoardCardContent = memo(function BoardCardContent({
   const { t } = useT("issues");
   const timeAgo = useTimeAgo();
   const storeProperties = useViewStore((s) => s.cardProperties);
+  const priorityCfg = PRIORITY_CONFIG[issue.priority];
+  const priorityLabel = t(($) => $.priority[issue.priority]) || priorityCfg.label;
   const wsId = useWorkspaceId();
   const { data: projects = [] } = useQuery({
     ...projectListOptions(wsId),
