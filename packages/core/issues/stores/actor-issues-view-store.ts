@@ -10,7 +10,7 @@ import {
 } from "./view-store";
 import { registerForWorkspaceRehydration } from "../../platform/workspace-storage";
 
-export type ActorIssuesScope = "assigned" | "created";
+export type ActorIssuesScope = "assigned" | "created" | "participated";
 
 export interface ActorIssuesViewState extends IssueViewState {
   scope: ActorIssuesScope;

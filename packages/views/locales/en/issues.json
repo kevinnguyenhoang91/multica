@@ -117,6 +117,10 @@
       "created": {
         "label": "Created",
         "description": "Issues created by this member or agent"
+      },
+      "participated": {
+        "label": "Participated",
+        "description": "Issues this agent has commented on"
       }
     },
     "empty": {
@@ -127,6 +131,10 @@
       "created": {
         "title": "No created issues",
         "description": "Issues created here will appear in this view."
+      },
+      "participated": {
+        "title": "No participated issues",
+        "description": "Issues this agent comments on will appear in this view."
       }
     },
     "search_placeholder": "Search issues...",
