@@ -112,10 +112,12 @@ vi.mock("../../navigation", () => ({
 
 // Mock editor components (Tiptap requires real DOM)
 vi.mock("../../editor", async () => {
-  const actual = await vi.importActual<typeof import("../../editor")>("../../editor");
+  const { AttachmentDownloadProvider } = await vi.importActual<
+    typeof import("../../editor/attachment-download-context")
+  >("../../editor/attachment-download-context");
 
   return {
-    ...actual,
+    AttachmentDownloadProvider,
     useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
     FileDropOverlay: () => null,
     // No-op so comment-card's AttachmentList can render without hitting the
