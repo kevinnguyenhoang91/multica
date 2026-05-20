@@ -778,15 +778,14 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	// open_only=true returns all non-done/cancelled issues (no limit).
 	if r.URL.Query().Get("open_only") == "true" {
 		issues, err := h.Queries.ListOpenIssues(ctx, db.ListOpenIssuesParams{
-			WorkspaceID:    wsUUID,
-			Priority:       priorityFilter,
-			AssigneeID:     assigneeFilter,
-			AssigneeIds:    assigneeIdsFilter,
-			CreatorID:      creatorFilter,
-			ProjectID:      projectFilter,
-			InvolvesUserID: involvesUserFilter,
-			MetadataFilter: metadataFilter,
+			WorkspaceID:         wsUUID,
+			Priority:            priorityFilter,
+			AssigneeID:          assigneeFilter,
+			AssigneeIds:         assigneeIdsFilter,
+			CreatorID:           creatorFilter,
+			ProjectID:           projectFilter,
 			ParticipatedAgentID: participatedAgentFilter,
+			InvolvesUserID:      involvesUserFilter,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -843,19 +842,18 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	issues, err := h.Queries.ListIssues(ctx, db.ListIssuesParams{
-		WorkspaceID:    wsUUID,
-		Limit:          int32(limit),
-		Offset:         int32(offset),
-		Status:         statusFilter,
-		Priority:       priorityFilter,
-		AssigneeID:     assigneeFilter,
-		AssigneeIds:    assigneeIdsFilter,
-		CreatorID:      creatorFilter,
-		ProjectID:      projectFilter,
-		InvolvesUserID: involvesUserFilter,
-		Scheduled:      scheduledFilter,
-		MetadataFilter: metadataFilter,
+		WorkspaceID:         wsUUID,
+		Limit:               int32(limit),
+		Offset:              int32(offset),
+		Status:              statusFilter,
+		Priority:            priorityFilter,
+		AssigneeID:          assigneeFilter,
+		AssigneeIds:         assigneeIdsFilter,
+		CreatorID:           creatorFilter,
+		ProjectID:           projectFilter,
 		ParticipatedAgentID: participatedAgentFilter,
+		InvolvesUserID:      involvesUserFilter,
+		Scheduled:           scheduledFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -864,17 +862,16 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 
 	// Get the true total count for pagination awareness.
 	total, err := h.Queries.CountIssues(ctx, db.CountIssuesParams{
-		WorkspaceID:    wsUUID,
-		Status:         statusFilter,
-		Priority:       priorityFilter,
-		AssigneeID:     assigneeFilter,
-		AssigneeIds:    assigneeIdsFilter,
-		CreatorID:      creatorFilter,
-		ProjectID:      projectFilter,
-		InvolvesUserID: involvesUserFilter,
-		Scheduled:      scheduledFilter,
-		MetadataFilter: metadataFilter,
+		WorkspaceID:         wsUUID,
+		Status:              statusFilter,
+		Priority:            priorityFilter,
+		AssigneeID:          assigneeFilter,
+		AssigneeIds:         assigneeIdsFilter,
+		CreatorID:           creatorFilter,
+		ProjectID:           projectFilter,
 		ParticipatedAgentID: participatedAgentFilter,
+		InvolvesUserID:      involvesUserFilter,
+		Scheduled:           scheduledFilter,
 	})
 	if err != nil {
 		total = int64(len(issues))
@@ -1066,11 +1063,6 @@ func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		where = append(where, fmt.Sprintf("i.project_id = %s::uuid", addArg(id)))
-	}
-	if filter, ok := parseMetadataFilterParam(w, r.URL.Query().Get("metadata")); !ok {
-		return
-	} else if filter != nil {
-		where = append(where, fmt.Sprintf("i.metadata @> %s::jsonb", addArg(string(filter))))
 	}
 	if raw := r.URL.Query().Get("participated_agent_id"); raw != "" {
 		id, ok := parseUUIDOrBadRequest(w, raw, "participated_agent_id")
