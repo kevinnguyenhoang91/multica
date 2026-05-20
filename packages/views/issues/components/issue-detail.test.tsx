@@ -111,74 +111,82 @@ vi.mock("../../navigation", () => ({
 }));
 
 // Mock editor components (Tiptap requires real DOM)
-vi.mock("../../editor", () => ({
-  useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
-  FileDropOverlay: () => null,
-  // No-op so comment-card's AttachmentList can render without hitting the
-  // real API singleton; tests that care about download wiring should write
-  // dedicated specs against `use-download-attachment.test.tsx`.
-  useDownloadAttachment: () => mockDownloadAttachment,
-  // Inert preview hook — comment-card's AttachmentList uses it to gate the
-  // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
-  useAttachmentPreview: () => ({
-    open: vi.fn(),
-    tryOpen: () => false,
-    modal: null,
-  }),
-  isPreviewable: () => false,
-  ReadonlyContent: ({ content }: { content: string }) => (
-    <div data-testid="readonly-content">{content}</div>
-  ),
-  ContentEditor: forwardRef(function MockContentEditor(
-    { defaultValue, onUpdate, placeholder }: any,
-    ref: any,
-  ) {
-    const valueRef = useRef(defaultValue || "");
-    const [value, setValue] = useState(defaultValue || "");
-    useImperativeHandle(ref, () => ({
-      getMarkdown: () => valueRef.current,
-      clearContent: () => { valueRef.current = ""; setValue(""); },
-      focus: () => {},
-      uploadFile: () => {},
-    }));
-    return (
-      <textarea
-        value={value}
-        onChange={(e) => {
-          valueRef.current = e.target.value;
-          setValue(e.target.value);
-          onUpdate?.(e.target.value);
-        }}
-        placeholder={placeholder}
-        data-testid="rich-text-editor"
-      />
-    );
-  }),
-  TitleEditor: forwardRef(function MockTitleEditor(
-    { defaultValue, placeholder, onBlur, onChange }: any,
-    ref: any,
-  ) {
-    const valueRef = useRef(defaultValue || "");
-    const [value, setValue] = useState(defaultValue || "");
-    useImperativeHandle(ref, () => ({
-      getText: () => valueRef.current,
-      focus: () => {},
-    }));
-    return (
-      <input
-        value={value}
-        onChange={(e) => {
-          valueRef.current = e.target.value;
-          setValue(e.target.value);
-          onChange?.(e.target.value);
-        }}
-        onBlur={() => onBlur?.(valueRef.current)}
-        placeholder={placeholder}
-        data-testid="title-editor"
-      />
-    );
-  }),
-}));
+vi.mock("../../editor", async () => {
+  const actual = await vi.importActual<typeof import("../../editor")>("../../editor");
+
+  return {
+    ...actual,
+    useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
+    FileDropOverlay: () => null,
+    // No-op so comment-card's AttachmentList can render without hitting the
+    // real API singleton; tests that care about download wiring should write
+    // dedicated specs against `use-download-attachment.test.tsx`.
+    useDownloadAttachment: () => mockDownloadAttachment,
+    // Inert preview hook — comment-card's AttachmentList uses it to gate the
+    // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
+    useAttachmentPreview: () => ({
+      open: vi.fn(),
+      tryOpen: () => false,
+      modal: null,
+    }),
+    isPreviewable: () => false,
+    ReadonlyContent: ({ content }: { content: string }) => (
+      <div data-testid="readonly-content">{content}</div>
+    ),
+    ContentEditor: forwardRef(function MockContentEditor(
+      { defaultValue, onUpdate, placeholder }: any,
+      ref: any,
+    ) {
+      const valueRef = useRef(defaultValue || "");
+      const [value, setValue] = useState(defaultValue || "");
+      useImperativeHandle(ref, () => ({
+        getMarkdown: () => valueRef.current,
+        clearContent: () => {
+          valueRef.current = "";
+          setValue("");
+        },
+        focus: () => {},
+        uploadFile: () => {},
+      }));
+      return (
+        <textarea
+          value={value}
+          onChange={(e) => {
+            valueRef.current = e.target.value;
+            setValue(e.target.value);
+            onUpdate?.(e.target.value);
+          }}
+          placeholder={placeholder}
+          data-testid="rich-text-editor"
+        />
+      );
+    }),
+    TitleEditor: forwardRef(function MockTitleEditor(
+      { defaultValue, placeholder, onBlur, onChange }: any,
+      ref: any,
+    ) {
+      const valueRef = useRef(defaultValue || "");
+      const [value, setValue] = useState(defaultValue || "");
+      useImperativeHandle(ref, () => ({
+        getText: () => valueRef.current,
+        focus: () => {},
+      }));
+      return (
+        <input
+          value={value}
+          onChange={(e) => {
+            valueRef.current = e.target.value;
+            setValue(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          onBlur={() => onBlur?.(valueRef.current)}
+          placeholder={placeholder}
+          data-testid="title-editor"
+        />
+      );
+    }),
+  };
+});
 
 // Mock common components
 vi.mock("../../common/actor-avatar", () => ({
@@ -811,7 +819,7 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Comment attachments")).toBeInTheDocument();
+      expect(screen.getByText("Attachments")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Images from comments")).toBeInTheDocument();
