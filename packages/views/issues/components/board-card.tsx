@@ -68,6 +68,7 @@ export const BoardCardContent = memo(function BoardCardContent({
   const { t } = useT("issues");
   const storeProperties = useViewStore((s) => s.cardProperties);
   const priorityCfg = PRIORITY_CONFIG[issue.priority];
+  const priorityLabel = t(($) => $.priority[issue.priority]) || priorityCfg.label;
   const wsId = useWorkspaceId();
   const { data: projects = [] } = useQuery({
     ...projectListOptions(wsId),
@@ -181,17 +182,17 @@ export const BoardCardContent = memo(function BoardCardContent({
                   priority={issue.priority}
                   onUpdate={handleUpdate}
                   trigger={
-                    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
-                      <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
-                      {t(($) => $.priority[issue.priority])}
-                    </span>
-                  }
-                />
+                     <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+                       <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
+                       {priorityLabel}
+                     </span>
+                   }
+                 />
               </PickerWrapper>
             ) : (
-              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
                 <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
-                {priorityCfg.label}
+                {priorityLabel}
               </span>
             ))}
           {showStartDate && (

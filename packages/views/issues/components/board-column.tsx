@@ -68,8 +68,10 @@ export function BoardColumn({
 
   return (
     <div className={`flex w-[280px] shrink-0 flex-col rounded-xl ${cfg?.columnBg ?? "bg-muted/40"} p-2`}>
-      <div className="mb-2 flex items-center justify-between px-1.5">
-        <BoardGroupHeading group={group} count={totalCount ?? issueIds.length} />
+      <div className="mb-2 flex items-center justify-between gap-2 px-1.5">
+        <div className="min-w-0 flex-1">
+          <BoardGroupHeading group={group} count={totalCount ?? issueIds.length} />
+        </div>
 
         {/* Right: add + menu */}
         <div className="flex items-center gap-1">
