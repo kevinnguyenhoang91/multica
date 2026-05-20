@@ -265,7 +265,12 @@ type RuntimeUsageBySquadResponse struct {
 func (h *Handler) GetRuntimeUsageBySquad(w http.ResponseWriter, r *http.Request) {
 	runtimeID := chi.URLParam(r, "runtimeId")
 
-	rt, err := h.Queries.GetAgentRuntime(r.Context(), parseUUID(runtimeID))
+	runtimeUUID, ok := parseUUIDOrBadRequest(w, runtimeID, "runtime_id")
+	if !ok {
+		return
+	}
+
+	rt, err := h.Queries.GetAgentRuntime(r.Context(), runtimeUUID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "runtime not found")
 		return
@@ -278,8 +283,9 @@ func (h *Handler) GetRuntimeUsageBySquad(w http.ResponseWriter, r *http.Request)
 	since := parseSinceParamInTZ(r, 30, rt.Timezone)
 
 	rows, err := h.Queries.ListRuntimeUsageBySquad(r.Context(), db.ListRuntimeUsageBySquadParams{
-		RuntimeID: parseUUID(runtimeID),
-		Since:     since,
+		RuntimeID:   runtimeUUID,
+		Since:       since,
+		WorkspaceID: rt.WorkspaceID,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list usage by squad")
