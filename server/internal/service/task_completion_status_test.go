@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/events"
-	"github.com/multica-ai/multica/server/pkg/protocol"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 // issueRow implements pgx.Row and returns a scanned db.Issue on success or an
@@ -155,6 +155,9 @@ func TestCompleteTask_AutoMovesIssueToInReviewForAgentAndSquad(t *testing.T) {
 	if payload["status_changed"] != true {
 		t.Errorf("expected status_changed=true, got %v", payload["status_changed"])
 	}
+	if payload["assignee_changed"] != true {
+		t.Errorf("expected assignee_changed=true, got %v", payload["assignee_changed"])
+	}
 	if payload["prev_status"] != "in_progress" {
 		t.Errorf("expected prev_status=in_progress, got %v", payload["prev_status"])
 	}
@@ -275,4 +278,3 @@ func TestCompleteTask_NoIssueLink(t *testing.T) {
 		t.Errorf("expected no event for unlinked task, got %d", len(*received))
 	}
 }
-

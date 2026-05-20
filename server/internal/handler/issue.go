@@ -2302,6 +2302,18 @@ type UpdateIssueRequest struct {
 	AttachmentIDs []string `json:"attachment_ids"`
 }
 
+func shouldHandoffToCreatorOnInReviewTransition(prevIssue db.Issue, nextStatus pgtype.Text) bool {
+	return nextStatus.Valid && nextStatus.String == "in_review" && prevIssue.Status != "in_review"
+}
+
+func applyCreatorOwnershipHandoffOnInReviewTransition(params *db.UpdateIssueParams, prevIssue db.Issue) {
+	if !shouldHandoffToCreatorOnInReviewTransition(prevIssue, params.Status) {
+		return
+	}
+	params.AssigneeType = pgtype.Text{String: prevIssue.CreatorType, Valid: true}
+	params.AssigneeID = prevIssue.CreatorID
+}
+
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	prevIssue, ok := h.loadIssueForUser(w, r, id)
@@ -2467,6 +2479,10 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Any transition into in_review hands ownership back to the creator,
+	// regardless of whether assignee fields were explicitly provided.
+	applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
+
 	// Validate the resulting (assignee_type, assignee_id) pair when the caller
 	// touches either field. Existing data on the issue is left alone if the
 	// caller is not changing it.
@@ -2499,8 +2515,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	resp := issueToResponse(issue, prefix)
 	slog.Info("issue updated", append(logger.RequestAttrs(r), "issue_id", id, "workspace_id", workspaceID)...)
 
-	assigneeChanged := (req.AssigneeType != nil || req.AssigneeID != nil) &&
-		(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
+	assigneeChanged := prevIssue.AssigneeType.String != issue.AssigneeType.String ||
+		uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID)
 	statusChanged := req.Status != nil && prevIssue.Status != issue.Status
 	priorityChanged := req.Priority != nil && prevIssue.Priority != issue.Priority
 	descriptionChanged := req.Description != nil && textToPtr(prevIssue.Description) != resp.Description
@@ -3017,6 +3033,10 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Any transition into in_review hands ownership back to the creator,
+		// regardless of whether assignee fields were explicitly provided.
+		applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
+
 		// Validate the resulting assignee pair when this batch update touches
 		// either assignee field. Skip the issue silently on failure.
 		_, batchTouchedType := rawUpdates["assignee_type"]
@@ -3037,8 +3057,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		resp := issueToResponse(issue, prefix)
 		actorType, actorID := h.resolveActor(r, userID, workspaceID)
 
-		assigneeChanged := (req.Updates.AssigneeType != nil || req.Updates.AssigneeID != nil) &&
-			(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
+		assigneeChanged := prevIssue.AssigneeType.String != issue.AssigneeType.String ||
+			uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID)
 		statusChanged := req.Updates.Status != nil && prevIssue.Status != issue.Status
 		priorityChanged := req.Updates.Priority != nil && prevIssue.Priority != issue.Priority
 
