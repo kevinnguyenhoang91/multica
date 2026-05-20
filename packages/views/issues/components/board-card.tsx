@@ -232,17 +232,41 @@ export const BoardCardContent = memo(function BoardCardContent({
                   startDate={issue.start_date}
                   onUpdate={handleUpdate}
                   trigger={
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <CalendarClock className="size-3" />
-                      {formatDate(issue.start_date!)}
+                    <ActorAvatar
+                      actorType={issue.assignee_type!}
+                      actorId={issue.assignee_id!}
+                      size={22}
+                      enableHoverCard
+                    />
+                  }
+                />
+              </PickerWrapper>
+            ) : (
+              <ActorAvatar
+                actorType={issue.assignee_type!}
+                actorId={issue.assignee_id!}
+                size={22}
+                enableHoverCard
+              />
+            ))}
+          {showPriority &&
+            (editable ? (
+              <PickerWrapper>
+                <PriorityPicker
+                  priority={issue.priority}
+                  onUpdate={handleUpdate}
+                  trigger={
+                    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+                      <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
+                      {t(($) => $.priority[issue.priority])}
                     </span>
                   }
                 />
               </PickerWrapper>
             ) : (
-              <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                <CalendarClock className="size-3" />
-                {formatDate(issue.start_date!)}
+              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+                <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
+                {priorityCfg.label}
               </span>
             )
           )}
