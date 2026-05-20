@@ -29,7 +29,6 @@ const (
 	EventAgentCreated                  = "agent_created"
 	EventOnboardingCompleted           = "onboarding_completed"
 	EventCloudWaitlistJoined           = "cloud_waitlist_joined"
-	EventStarterContentDecided         = "starter_content_decided"
 	EventFeedbackSubmitted             = "feedback_submitted"
 )
 
@@ -71,14 +70,6 @@ const (
 	OnboardingPathSkipExisting   = "skip_existing"   // "I've done this before" from welcome
 	OnboardingPathInviteAccept   = "invite_accept"   // accepted at least one invitation from /invitations
 	OnboardingPathUnknown        = "unknown"         // fallback when the server can't derive the path
-)
-
-// Starter content branches. Matches the server-authoritative decision in
-// ImportStarterContent (hasAgent ? agent_guided : self_serve). DismissStarter
-// carries the same branch so acceptance rates split cleanly.
-const (
-	StarterContentBranchAgentGuided = "agent_guided"
-	StarterContentBranchSelfServe   = "self_serve"
 )
 
 // Platform is used as the "platform" event property so funnels can split by
@@ -386,37 +377,42 @@ func TeamInviteAccepted(inviteeID, workspaceID string, daysSinceInvite int64) Ev
 }
 
 // OnboardingQuestionnaireSubmitted fires the first time a user's
-// `user.onboarding_questionnaire` transitions from empty (or partial) to
-// all three answers present. The handler drives this transition — we
-// emit from PatchOnboarding so the single emission site stays honest
-// even if the frontend retries.
+// `user.onboarding_questionnaire` transitions from "at least one slot
+// unresolved" to "every slot has either an answer or a skip marker".
+// The handler drives this transition — we emit from PatchOnboarding so
+// the single emission site stays honest even if the frontend retries.
 //
 // The three answers are also mirrored into person properties via $set
-// so cohorting by role / use_case / team_size works across every event
+// so cohorting by source / role / use_case works across every event
 // on the same user without re-joining back to the DB.
 //
-// teamSizeOther / roleOther / useCaseOther are presence booleans only —
-// the free-text content is kept in the DB for product research but not
-// broadcast via analytics (PII risk + low cardinality ask).
-func OnboardingQuestionnaireSubmitted(userID, teamSize, role, useCase string, teamSizeOther, roleOther, useCaseOther bool) Event {
+// `*Skipped` booleans capture per-question skip intent (the new v2
+// signal). `*HasOther` are presence booleans for the free-text "other"
+// override; the free-text content is kept in the DB for product
+// research but not broadcast via analytics (PII risk + low cardinality
+// ask).
+func OnboardingQuestionnaireSubmitted(userID, source, role, useCase string, sourceSkipped, roleSkipped, useCaseSkipped, sourceHasOther, roleHasOther, useCaseHasOther bool) Event {
 	return Event{
 		Name:       EventOnboardingQuestionnaireSubmit,
 		DistinctID: userID,
 		Properties: withCoreProperties(map[string]any{
-			"team_size":           teamSize,
-			"role":                role,
-			"use_case":            useCase,
-			"team_size_has_other": teamSizeOther,
-			"role_has_other":      roleOther,
-			"use_case_has_other":  useCaseOther,
+			"source":             source,
+			"role":               role,
+			"use_case":           useCase,
+			"source_skipped":     sourceSkipped,
+			"role_skipped":       roleSkipped,
+			"use_case_skipped":   useCaseSkipped,
+			"source_has_other":   sourceHasOther,
+			"role_has_other":     roleHasOther,
+			"use_case_has_other": useCaseHasOther,
 		}, CoreProperties{
 			UserID: userID,
 			Source: SourceOnboarding,
 		}),
 		Set: map[string]any{
-			"team_size": teamSize,
-			"role":      role,
-			"use_case":  useCase,
+			"source":   source,
+			"role":     role,
+			"use_case": useCase,
 		},
 	}
 }
@@ -491,27 +487,6 @@ func CloudWaitlistJoined(userID string, hasReason bool) Event {
 		}, CoreProperties{
 			UserID: userID,
 			Source: SourceOnboarding,
-		}),
-	}
-}
-
-// StarterContentDecided fires on the atomic NULL -> terminal state
-// transition in both ImportStarterContent and DismissStarterContent.
-// branch carries agent_guided / self_serve for BOTH decisions — the
-// dismiss handler resolves it from the current ListAgents state so
-// acceptance rates split cleanly by branch.
-func StarterContentDecided(userID, workspaceID, decision, branch string) Event {
-	return Event{
-		Name:        EventStarterContentDecided,
-		DistinctID:  userID,
-		WorkspaceID: workspaceID,
-		Properties: withCoreProperties(map[string]any{
-			"decision": decision,
-			"branch":   branch,
-		}, CoreProperties{
-			UserID:      userID,
-			WorkspaceID: workspaceID,
-			Source:      SourceOnboarding,
 		}),
 	}
 }

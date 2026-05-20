@@ -62,6 +62,14 @@ type Task struct {
 	UseSandbox              *bool                 `json:"use_sandbox,omitempty"`               // quick-create sandbox toggle; nil on non-quick-create tasks
 	SquadID                 string                `json:"squad_id,omitempty"`                  // when the picker was a squad, the squad's UUID; Agent is still the resolved leader
 	SquadName               string                `json:"squad_name,omitempty"`                // display name for the picker squad, used in prompt text
+	// RequestingUserName + RequestingUserProfileDescription describe the human
+	// the agent is working on behalf of. v1 sources them from the runtime
+	// owner (the user who registered the daemon). Empty when the runtime has
+	// no owner (cloud / system runtimes) or the user hasn't set a description.
+	// Injected into the brief under `## Requesting User`; omitted entirely
+	// when description is empty so the agent doesn't see a useless heading.
+	RequestingUserName               string `json:"requesting_user_name,omitempty"`
+	RequestingUserProfileDescription string `json:"requesting_user_profile_description,omitempty"`
 }
 
 // ChatAttachmentMeta is the structured attachment metadata the daemon
@@ -89,9 +97,10 @@ type AgentData struct {
 
 // SkillData represents a structured skill for task execution.
 type SkillData struct {
-	Name    string          `json:"name"`
-	Content string          `json:"content"`
-	Files   []SkillFileData `json:"files,omitempty"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Content     string          `json:"content"`
+	Files       []SkillFileData `json:"files,omitempty"`
 }
 
 // SkillFileData represents a supporting file within a skill.

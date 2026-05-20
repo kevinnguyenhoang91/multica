@@ -177,6 +177,14 @@ type AgentTaskResponse struct {
 	UseSandbox              *bool                 `json:"use_sandbox,omitempty"`               // quick-create sandbox toggle; nil on non-quick-create tasks
 	SquadID                 string                `json:"squad_id,omitempty"`                  // for quick-create tasks where the picker was a squad; Agent is still the resolved leader
 	SquadName               string                `json:"squad_name,omitempty"`                // display name for the picker squad
+	// RequestingUserName + RequestingUserProfileDescription mirror the user
+	// the agent is acting on behalf of (see daemon/types.go). v1 sources them
+	// from the runtime owner so they're populated for daemon runtimes and
+	// empty otherwise. The daemon emits both into the brief under
+	// `## Requesting User`; the heading is skipped entirely when description
+	// is empty.
+	RequestingUserName               string `json:"requesting_user_name,omitempty"`
+	RequestingUserProfileDescription string `json:"requesting_user_profile_description,omitempty"`
 	Kind                    string                `json:"kind"`                                // discriminator: "comment" | "autopilot" | "chat" | "quick_create" | "direct" — used by the activity row to label tasks that have no linked issue
 }
 
