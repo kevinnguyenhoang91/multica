@@ -45,6 +45,8 @@ export interface ListIssuesParams {
   assignee_ids?: string[];
   creator_id?: string;
   project_id?: string;
+  /** Issue has at least one comment authored by this agent id. */
+  participated_agent_id?: string;
   /**
    * Widen the assignee filter to issues where the user is the *indirect*
    * assignee — assignee is one of the user's owned agents, or a squad that
@@ -81,6 +83,8 @@ export interface ListGroupedIssuesParams {
   assignee_ids?: string[];
   creator_id?: string;
   project_id?: string;
+  /** See `ListIssuesParams.participated_agent_id` — same semantics. */
+  participated_agent_id?: string;
   /** See `ListIssuesParams.involves_user_id` — same semantics. */
   involves_user_id?: string;
   assignee_filters?: IssueActorRef[];

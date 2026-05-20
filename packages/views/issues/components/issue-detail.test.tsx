@@ -132,6 +132,9 @@ vi.mock("../../editor", async () => {
       modal: null,
     }),
     isPreviewable: () => false,
+    Attachment: ({ attachment }: { attachment: { name?: string } }) => (
+      <div>{attachment.name ?? "attachment"}</div>
+    ),
     ReadonlyContent: ({ content }: { content: string }) => (
       <div data-testid="readonly-content">{content}</div>
     ),
@@ -721,15 +724,17 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Comment links")).toBeInTheDocument();
+      expect(screen.getByText("Resources")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Pull requests from comments")).toBeInTheDocument();
-    expect(screen.getByText("Other links from comments")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "github.com/acme/multica/pull/42" }))
-      .toHaveAttribute("href", "https://github.com/acme/multica/pull/42");
+    // The PR link from comments is now folded into the Pull requests section,
+    // not shown as a subgroup inside Resources.
+    expect(screen.queryByText("Pull requests from comments")).not.toBeInTheDocument();
+    expect(screen.queryByText("Other links from comments")).not.toBeInTheDocument();
+    // The non-PR link should appear in Resources.
     expect(screen.getByRole("link", { name: "docs.example.com/spec" }))
       .toHaveAttribute("href", "https://docs.example.com/spec");
+    // The PR link from comments should be deduplicated (only one anchor for it).
     expect(screen.getAllByRole("link", { name: "github.com/acme/multica/pull/42" })).toHaveLength(1);
   });
 
