@@ -111,74 +111,81 @@ vi.mock("../../navigation", () => ({
 }));
 
 // Mock editor components (Tiptap requires real DOM)
-vi.mock("../../editor", () => ({
-  useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
-  FileDropOverlay: () => null,
-  // No-op so comment-card's AttachmentList can render without hitting the
-  // real API singleton; tests that care about download wiring should write
-  // dedicated specs against `use-download-attachment.test.tsx`.
-  useDownloadAttachment: () => mockDownloadAttachment,
-  // Inert preview hook — comment-card's AttachmentList uses it to gate the
-  // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
-  useAttachmentPreview: () => ({
-    open: vi.fn(),
-    tryOpen: () => false,
-    modal: null,
-  }),
-  isPreviewable: () => false,
-  ReadonlyContent: ({ content }: { content: string }) => (
-    <div data-testid="readonly-content">{content}</div>
-  ),
-  ContentEditor: forwardRef(function MockContentEditor(
-    { defaultValue, onUpdate, placeholder }: any,
-    ref: any,
-  ) {
-    const valueRef = useRef(defaultValue || "");
-    const [value, setValue] = useState(defaultValue || "");
-    useImperativeHandle(ref, () => ({
-      getMarkdown: () => valueRef.current,
-      clearContent: () => { valueRef.current = ""; setValue(""); },
-      focus: () => {},
-      uploadFile: () => {},
-    }));
-    return (
-      <textarea
-        value={value}
-        onChange={(e) => {
-          valueRef.current = e.target.value;
-          setValue(e.target.value);
-          onUpdate?.(e.target.value);
-        }}
-        placeholder={placeholder}
-        data-testid="rich-text-editor"
-      />
-    );
-  }),
-  TitleEditor: forwardRef(function MockTitleEditor(
-    { defaultValue, placeholder, onBlur, onChange }: any,
-    ref: any,
-  ) {
-    const valueRef = useRef(defaultValue || "");
-    const [value, setValue] = useState(defaultValue || "");
-    useImperativeHandle(ref, () => ({
-      getText: () => valueRef.current,
-      focus: () => {},
-    }));
-    return (
-      <input
-        value={value}
-        onChange={(e) => {
-          valueRef.current = e.target.value;
-          setValue(e.target.value);
-          onChange?.(e.target.value);
-        }}
-        onBlur={() => onBlur?.(valueRef.current)}
-        placeholder={placeholder}
-        data-testid="title-editor"
-      />
-    );
-  }),
-}));
+vi.mock("../../editor", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../editor")>();
+  return {
+    ...actual,
+    useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
+    FileDropOverlay: () => null,
+    // No-op so comment-card's AttachmentList can render without hitting the
+    // real API singleton; tests that care about download wiring should write
+    // dedicated specs against `use-download-attachment.test.tsx`.
+    useDownloadAttachment: () => mockDownloadAttachment,
+    // Inert preview hook — comment-card's AttachmentList uses it to gate the
+    // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
+    useAttachmentPreview: () => ({
+      open: vi.fn(),
+      tryOpen: () => false,
+      modal: null,
+    }),
+    isPreviewable: () => false,
+    ReadonlyContent: ({ content }: { content: string }) => (
+      <div data-testid="readonly-content">{content}</div>
+    ),
+    ContentEditor: forwardRef(function MockContentEditor(
+      { defaultValue, onUpdate, placeholder }: any,
+      ref: any,
+    ) {
+      const valueRef = useRef(defaultValue || "");
+      const [value, setValue] = useState(defaultValue || "");
+      useImperativeHandle(ref, () => ({
+        getMarkdown: () => valueRef.current,
+        clearContent: () => { valueRef.current = ""; setValue(""); },
+        focus: () => {},
+        uploadFile: () => {},
+      }));
+      return (
+        <textarea
+          value={value}
+          onChange={(e) => {
+            valueRef.current = e.target.value;
+            setValue(e.target.value);
+            onUpdate?.(e.target.value);
+          }}
+          placeholder={placeholder}
+          data-testid="rich-text-editor"
+        />
+      );
+    }),
+    TitleEditor: forwardRef(function MockTitleEditor(
+      { defaultValue, placeholder, onBlur, onChange }: any,
+      ref: any,
+    ) {
+      const valueRef = useRef(defaultValue || "");
+      const [value, setValue] = useState(defaultValue || "");
+      useImperativeHandle(ref, () => ({
+        getText: () => valueRef.current,
+        focus: () => {},
+      }));
+      return (
+        <input
+          value={value}
+          onChange={(e) => {
+            valueRef.current = e.target.value;
+            setValue(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          onBlur={() => onBlur?.(valueRef.current)}
+          placeholder={placeholder}
+          data-testid="title-editor"
+        />
+      );
+    }),
+    // Pass-through provider so comment-card's AttachmentList can render with
+    // attachment download wiring without hitting the real context singleton.
+    AttachmentDownloadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  };
+});
 
 // Mock common components
 vi.mock("../../common/actor-avatar", () => ({
@@ -770,15 +777,17 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Comment links")).toBeInTheDocument();
+      expect(screen.getByText("Resources")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Pull requests from comments")).toBeInTheDocument();
-    expect(screen.getByText("Other links from comments")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "github.com/acme/multica/pull/42" }))
-      .toHaveAttribute("href", "https://github.com/acme/multica/pull/42");
+    // The PR link from comments is now folded into the Pull requests section,
+    // not shown as a subgroup inside Resources.
+    expect(screen.queryByText("Pull requests from comments")).not.toBeInTheDocument();
+    expect(screen.queryByText("Other links from comments")).not.toBeInTheDocument();
+    // The non-PR link should appear in Resources.
     expect(screen.getByRole("link", { name: "docs.example.com/spec" }))
       .toHaveAttribute("href", "https://docs.example.com/spec");
+    // The PR link from comments should be deduplicated (only one anchor for it).
     expect(screen.getAllByRole("link", { name: "github.com/acme/multica/pull/42" })).toHaveLength(1);
   });
 
