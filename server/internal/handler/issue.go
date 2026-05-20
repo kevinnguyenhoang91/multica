@@ -2375,8 +2375,9 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 }
 
 // enqueueReviewAssigneeOnInReviewTransition re-triggers agent/squad assignees
-// when work enters review via a status transition without an assignee change,
-// excluding backlog -> in_review moves handled separately below.
+// when work enters review via a status transition without an assignee change.
+// backlog -> in_review is excluded here to avoid double-triggering because
+// backlog exits are handled by the separate backlog transition path.
 func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
 	ctx context.Context,
 	prevIssue db.Issue,
@@ -2403,6 +2404,7 @@ func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
 		}
 	}
 	if h.isSquadLeaderReady(ctx, issue) {
+		// enqueueSquadLeaderTask performs the leader pending-task deduplication.
 		h.enqueueSquadLeaderTask(ctx, issue, pgtype.UUID{}, actorType, actorID)
 	}
 }
