@@ -33,4 +33,10 @@ func TestAdvanceIssueSQL_ContainsActiveTaskGuard(t *testing.T) {
 	if !strings.Contains(sql, "status = 'in_progress'") {
 		t.Error("SQL must require status = 'in_progress' (terminal-state protection)")
 	}
+	if !strings.Contains(sql, "assignee_type = creator_type") {
+		t.Error("SQL must hand ownership back by setting assignee_type = creator_type")
+	}
+	if !strings.Contains(sql, "assignee_id = creator_id") {
+		t.Error("SQL must hand ownership back by setting assignee_id = creator_id")
+	}
 }
