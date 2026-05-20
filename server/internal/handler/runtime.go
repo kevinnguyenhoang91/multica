@@ -264,6 +264,61 @@ func (h *Handler) GetRuntimeUsageByAgent(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// RuntimeUsageBySquadResponse is one (squad, model) row of "Cost by squad".
+// Model stays on the wire so the client can keep using its pricing table to
+// price each squad's aggregate.
+type RuntimeUsageBySquadResponse struct {
+	SquadID          string `json:"squad_id"`
+	Model            string `json:"model"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	TaskCount        int32  `json:"task_count"`
+}
+
+// GetRuntimeUsageBySquad returns per-squad token aggregates for a runtime
+// since the cutoff window. Drives the runtime-detail "Cost by squad" tab.
+func (h *Handler) GetRuntimeUsageBySquad(w http.ResponseWriter, r *http.Request) {
+	runtimeID := chi.URLParam(r, "runtimeId")
+
+	rt, err := h.Queries.GetAgentRuntime(r.Context(), parseUUID(runtimeID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "runtime not found")
+		return
+	}
+
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(rt.WorkspaceID), "runtime not found"); !ok {
+		return
+	}
+
+	since := parseSinceParamInTZ(r, 30, rt.Timezone)
+
+	rows, err := h.Queries.ListRuntimeUsageBySquad(r.Context(), db.ListRuntimeUsageBySquadParams{
+		RuntimeID: parseUUID(runtimeID),
+		Since:     since,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list usage by squad")
+		return
+	}
+
+	resp := make([]RuntimeUsageBySquadResponse, len(rows))
+	for i, row := range rows {
+		resp[i] = RuntimeUsageBySquadResponse{
+			SquadID:          uuidToString(row.SquadID),
+			Model:            row.Model,
+			InputTokens:      row.InputTokens,
+			OutputTokens:     row.OutputTokens,
+			CacheReadTokens:  row.CacheReadTokens,
+			CacheWriteTokens: row.CacheWriteTokens,
+			TaskCount:        row.TaskCount,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // RuntimeUsageByHourResponse is one (hour, model) row. Hours with zero
 // activity are omitted by the SQL — clients fill the gap to render a
 // continuous 0..23 axis. Model is preserved for client-side cost math.

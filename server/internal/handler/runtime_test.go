@@ -268,6 +268,102 @@ func TestGetRuntimeUsageDailyRollupCutoffUsesRuntimeTimezone(t *testing.T) {
 	}
 }
 
+func TestGetRuntimeUsageBySquad_AggregatesBySquad(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+
+	var runtimeID string
+	if err := testPool.QueryRow(ctx, `
+		SELECT id FROM agent_runtime WHERE workspace_id = $1 LIMIT 1
+	`, testWorkspaceID).Scan(&runtimeID); err != nil {
+		t.Fatalf("fetch runtime: %v", err)
+	}
+	var agentID string
+	if err := testPool.QueryRow(ctx, `
+		SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1
+	`, testWorkspaceID).Scan(&agentID); err != nil {
+		t.Fatalf("fetch agent: %v", err)
+	}
+
+	var squadID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO squad (workspace_id, name, description, leader_id, creator_id)
+		VALUES ($1, 'Runtime usage squad', 'runtime usage squad test', $2, $3)
+		RETURNING id
+	`, testWorkspaceID, agentID, testUserID).Scan(&squadID); err != nil {
+		t.Fatalf("create squad: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM squad WHERE id = $1`, squadID)
+	})
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO squad_member (squad_id, member_type, member_id, role)
+		VALUES ($1, 'agent', $2, 'member')
+	`, squadID, agentID); err != nil {
+		t.Fatalf("add squad member: %v", err)
+	}
+
+	var issueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, creator_id, creator_type)
+		VALUES ($1, 'runtime squad usage test', $2, 'member')
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&issueID); err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
+	})
+
+	var taskID string
+	usedAt := time.Now().UTC().Add(-10 * time.Minute)
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO agent_task_queue (agent_id, issue_id, runtime_id, status, created_at)
+		VALUES ($1, $2, $3, 'completed', $4)
+		RETURNING id
+	`, agentID, issueID, runtimeID, usedAt).Scan(&taskID); err != nil {
+		t.Fatalf("insert task: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE id = $1`, taskID)
+	})
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO task_usage (task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, created_at)
+		VALUES ($1, 'test-provider', 'runtime-squad-test-model', 321, 123, 11, 7, $2)
+	`, taskID, usedAt); err != nil {
+		t.Fatalf("insert task_usage: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("GET", "/api/runtimes/"+runtimeID+"/usage/by-squad?days=1", nil)
+	req = withURLParam(req, "runtimeId", runtimeID)
+	testHandler.GetRuntimeUsageBySquad(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GetRuntimeUsageBySquad: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []RuntimeUsageBySquadResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	found := false
+	for _, row := range resp {
+		if row.SquadID != squadID || row.Model != "runtime-squad-test-model" {
+			continue
+		}
+		found = true
+		if row.InputTokens != 321 || row.OutputTokens != 123 || row.CacheReadTokens != 11 || row.CacheWriteTokens != 7 || row.TaskCount != 1 {
+			t.Fatalf("unexpected squad usage row: %+v", row)
+		}
+	}
+	if !found {
+		t.Fatalf("expected squad %s usage row in response, got %+v", squadID, resp)
+	}
+}
+
 func TestUpdateAgentRuntimeTimezoneValidatesPermissionAndValue(t *testing.T) {
 	if testHandler == nil {
 		t.Skip("database not available")

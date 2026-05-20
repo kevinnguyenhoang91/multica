@@ -259,6 +259,74 @@ func (q *Queries) ListRuntimeUsageByAgent(ctx context.Context, arg ListRuntimeUs
 	return items, nil
 }
 
+const listRuntimeUsageBySquad = `-- name: ListRuntimeUsageBySquad :many
+SELECT
+    sm.squad_id,
+    tu.model,
+    SUM(tu.input_tokens)::bigint AS input_tokens,
+    SUM(tu.output_tokens)::bigint AS output_tokens,
+    SUM(tu.cache_read_tokens)::bigint AS cache_read_tokens,
+    SUM(tu.cache_write_tokens)::bigint AS cache_write_tokens,
+    COUNT(DISTINCT tu.task_id)::int AS task_count
+FROM task_usage tu
+JOIN agent_task_queue atq ON atq.id = tu.task_id
+JOIN squad_member sm
+  ON sm.member_type = 'agent'
+ AND sm.member_id = atq.agent_id
+JOIN squad s ON s.id = sm.squad_id
+WHERE atq.runtime_id = $1
+  AND tu.created_at >= $2::timestamptz
+  AND s.archived_at IS NULL
+GROUP BY sm.squad_id, tu.model
+ORDER BY sm.squad_id, tu.model
+`
+
+type ListRuntimeUsageBySquadParams struct {
+	RuntimeID pgtype.UUID        `json:"runtime_id"`
+	Since     pgtype.Timestamptz `json:"since"`
+}
+
+type ListRuntimeUsageBySquadRow struct {
+	SquadID          pgtype.UUID `json:"squad_id"`
+	Model            string      `json:"model"`
+	InputTokens      int64       `json:"input_tokens"`
+	OutputTokens     int64       `json:"output_tokens"`
+	CacheReadTokens  int64       `json:"cache_read_tokens"`
+	CacheWriteTokens int64       `json:"cache_write_tokens"`
+	TaskCount        int32       `json:"task_count"`
+}
+
+// Per-(squad, model) token aggregates for a runtime since a cutoff. This
+// folds task usage through agent squad memberships so the runtime-detail
+// "Cost by squad" tab can mirror the existing by-agent view.
+func (q *Queries) ListRuntimeUsageBySquad(ctx context.Context, arg ListRuntimeUsageBySquadParams) ([]ListRuntimeUsageBySquadRow, error) {
+	rows, err := q.db.Query(ctx, listRuntimeUsageBySquad, arg.RuntimeID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRuntimeUsageBySquadRow{}
+	for rows.Next() {
+		var i ListRuntimeUsageBySquadRow
+		if err := rows.Scan(
+			&i.SquadID,
+			&i.Model,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.TaskCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRuntimeUsageDaily = `-- name: ListRuntimeUsageDaily :many
 SELECT
     bucket_date AS date,

@@ -6,6 +6,7 @@ import {
   addDaysIso,
   aggregateByWeek,
   aggregateCostByModel,
+  aggregateCostBySquad,
   collectUnmappedModels,
   estimateCost,
   isModelPriced,
@@ -354,6 +355,44 @@ describe("user-supplied custom pricing", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const after = aggregateCostByModel(rows as any);
     expect(after[0]?.cost).toBeCloseTo(2, 5);
+  });
+
+  it("aggregateCostBySquad folds per-model rows into one row per squad", () => {
+    const rows = [
+      {
+        squad_id: "squad-alpha",
+        model: "claude-sonnet-4-6",
+        input_tokens: 1_000_000,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        task_count: 1,
+      },
+      {
+        squad_id: "squad-alpha",
+        model: "gpt-5",
+        input_tokens: 500_000,
+        output_tokens: 500_000,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        task_count: 2,
+      },
+      {
+        squad_id: "squad-beta",
+        model: "gpt-5",
+        input_tokens: 100_000,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        task_count: 1,
+      },
+    ];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(aggregateCostBySquad(rows as any)).toEqual([
+      { key: "squad-alpha", tokens: 2_000_000, cost: 8.625, taskCount: 3 },
+      { key: "squad-beta", tokens: 100_000, cost: 0.125, taskCount: 1 },
+    ]);
   });
 });
 
