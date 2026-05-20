@@ -2375,7 +2375,8 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 }
 
 // enqueueReviewAssigneeOnInReviewTransition re-triggers agent/squad assignees
-// when work enters review via status-only updates.
+// when work enters review via a status transition without an assignee change,
+// excluding backlog -> in_review moves handled separately below.
 func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
 	ctx context.Context,
 	prevIssue db.Issue,
@@ -2392,6 +2393,12 @@ func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
 			IssueID: issue.ID,
 			AgentID: issue.AssigneeID,
 		})
+		if err != nil {
+			slog.Warn("check pending review assignee task failed",
+				"issue_id", uuidToString(issue.ID),
+				"agent_id", uuidToString(issue.AssigneeID),
+				"error", err)
+		}
 		if err == nil && !hasPending {
 			h.TaskService.EnqueueTaskForIssue(ctx, issue)
 		}
