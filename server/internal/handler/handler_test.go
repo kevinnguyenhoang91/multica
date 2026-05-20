@@ -1402,6 +1402,119 @@ func TestUpdateIssueInReviewTransitionReassignsToCreator(t *testing.T) {
 	}
 }
 
+func TestUpdateIssueInReviewTransitionKeepsHumanAssignee(t *testing.T) {
+	ctx := context.Background()
+	var memberID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO "user" (name, email)
+		VALUES ($1, $2)
+		RETURNING id
+	`, "Handler Test Member", fmt.Sprintf("handler-test-member-%d@multica.ai", time.Now().UnixNano())).Scan(&memberID); err != nil {
+		t.Fatalf("failed to create workspace member user: %v", err)
+	}
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO member (workspace_id, user_id, role)
+		VALUES ($1, $2, 'member')
+	`, testWorkspaceID, memberID); err != nil {
+		t.Fatalf("failed to add workspace member: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, memberID)
+	})
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":         "keep human assignee on in_review transition",
+		"status":        "in_progress",
+		"assignee_type": "member",
+		"assignee_id":   memberID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	defer func() {
+		cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+		cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+		testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+	}()
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/issues/"+created.ID, map[string]any{
+		"status": "in_review",
+	})
+	req = withURLParam(req, "id", created.ID)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateIssue: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var updated IssueResponse
+	json.NewDecoder(w.Body).Decode(&updated)
+	if updated.Status != "in_review" {
+		t.Fatalf("expected status=in_review, got %q", updated.Status)
+	}
+	if updated.AssigneeType == nil || *updated.AssigneeType != "member" {
+		t.Fatalf("expected assignee_type=member, got %v", updated.AssigneeType)
+	}
+	if updated.AssigneeID == nil || *updated.AssigneeID != memberID {
+		t.Fatalf("expected assignee_id=%s (unchanged), got %v", memberID, updated.AssigneeID)
+	}
+}
+
+func TestUpdateIssueToInReviewFromTodoKeepsAgentAssignee(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":         "no handoff outside in_progress->in_review",
+		"status":        "todo",
+		"assignee_type": "agent",
+		"assignee_id":   agentID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	defer func() {
+		cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+		cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+		testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+	}()
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/issues/"+created.ID, map[string]any{
+		"status": "in_review",
+	})
+	req = withURLParam(req, "id", created.ID)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateIssue: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var updated IssueResponse
+	json.NewDecoder(w.Body).Decode(&updated)
+	if updated.Status != "in_review" {
+		t.Fatalf("expected status=in_review, got %q", updated.Status)
+	}
+	if updated.AssigneeType == nil || *updated.AssigneeType != "agent" {
+		t.Fatalf("expected assignee_type=agent (unchanged), got %v", updated.AssigneeType)
+	}
+	if updated.AssigneeID == nil || *updated.AssigneeID != agentID {
+		t.Fatalf("expected assignee_id=%s (unchanged), got %v", agentID, updated.AssigneeID)
+	}
+}
+
 func TestCommentCRUD(t *testing.T) {
 	// Create an issue first
 	w := httptest.NewRecorder()

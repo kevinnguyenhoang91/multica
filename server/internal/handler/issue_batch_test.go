@@ -3,9 +3,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // TestBatchUpdateNoMutationReturnsZero — regression for #1660.
@@ -174,6 +176,103 @@ func TestBatchUpdateInReviewTransitionReassignsToCreator(t *testing.T) {
 		if got.AssigneeID == nil || *got.AssigneeID != testUserID {
 			t.Fatalf("issue %s: expected assignee_id=%s (creator), got %v", id, testUserID, got.AssigneeID)
 		}
+	}
+}
+
+func TestBatchUpdateInReviewTransitionKeepsHumanAssignee(t *testing.T) {
+	ctx := context.Background()
+	var memberID string
+	if err := testPool.QueryRow(ctx, `
+			INSERT INTO "user" (name, email)
+			VALUES ($1, $2)
+			RETURNING id
+		`, "Batch Test Member", fmt.Sprintf("batch-test-member-%d@multica.ai", time.Now().UnixNano())).Scan(&memberID); err != nil {
+		t.Fatalf("failed to create workspace member user: %v", err)
+	}
+	if _, err := testPool.Exec(ctx, `
+			INSERT INTO member (workspace_id, user_id, role)
+			VALUES ($1, $2, 'member')
+		`, testWorkspaceID, memberID); err != nil {
+		t.Fatalf("failed to add workspace member: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, memberID)
+	})
+
+	issueID := createTestIssueWithAssignee(t, "BU-keep-human-assignee", "in_progress", "low", "member", memberID)
+	t.Cleanup(func() { deleteTestIssue(t, issueID) })
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
+		"issue_ids": []string{issueID},
+		"updates":   map[string]any{"status": "in_review"},
+	})
+	testHandler.BatchUpdateIssues(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	gw := httptest.NewRecorder()
+	gr := newRequest("GET", "/api/issues/"+issueID, nil)
+	gr = withURLParam(gr, "id", issueID)
+	testHandler.GetIssue(gw, gr)
+	if gw.Code != http.StatusOK {
+		t.Fatalf("GetIssue(%s): expected 200, got %d: %s", issueID, gw.Code, gw.Body.String())
+	}
+	var got IssueResponse
+	json.NewDecoder(gw.Body).Decode(&got)
+	if got.Status != "in_review" {
+		t.Fatalf("issue %s: expected status=in_review, got %q", issueID, got.Status)
+	}
+	if got.AssigneeType == nil || *got.AssigneeType != "member" {
+		t.Fatalf("issue %s: expected assignee_type=member, got %v", issueID, got.AssigneeType)
+	}
+	if got.AssigneeID == nil || *got.AssigneeID != memberID {
+		t.Fatalf("issue %s: expected assignee_id=%s (unchanged), got %v", issueID, memberID, got.AssigneeID)
+	}
+}
+
+func TestBatchUpdateToInReviewFromTodoKeepsAgentAssignee(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	issueID := createTestIssueWithAssignee(t, "BU-no-handoff-from-todo", "todo", "low", "agent", agentID)
+	t.Cleanup(func() { deleteTestIssue(t, issueID) })
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
+		"issue_ids": []string{issueID},
+		"updates":   map[string]any{"status": "in_review"},
+	})
+	testHandler.BatchUpdateIssues(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	gw := httptest.NewRecorder()
+	gr := newRequest("GET", "/api/issues/"+issueID, nil)
+	gr = withURLParam(gr, "id", issueID)
+	testHandler.GetIssue(gw, gr)
+	if gw.Code != http.StatusOK {
+		t.Fatalf("GetIssue(%s): expected 200, got %d: %s", issueID, gw.Code, gw.Body.String())
+	}
+	var got IssueResponse
+	json.NewDecoder(gw.Body).Decode(&got)
+	if got.Status != "in_review" {
+		t.Fatalf("issue %s: expected status=in_review, got %q", issueID, got.Status)
+	}
+	if got.AssigneeType == nil || *got.AssigneeType != "agent" {
+		t.Fatalf("issue %s: expected assignee_type=agent, got %v", issueID, got.AssigneeType)
+	}
+	if got.AssigneeID == nil || *got.AssigneeID != agentID {
+		t.Fatalf("issue %s: expected assignee_id=%s (unchanged), got %v", issueID, agentID, got.AssigneeID)
 	}
 }
 
