@@ -191,10 +191,10 @@ func assigneeGroupID(assigneeType pgtype.Text, assigneeID pgtype.UUID) string {
 // SearchIssueResponse extends IssueResponse with search metadata.
 type SearchIssueResponse struct {
 	IssueResponse
-	MatchSource                string  `json:"match_source"`
-	MatchedSnippet             *string `json:"matched_snippet,omitempty"`
-	MatchedDescriptionSnippet  *string `json:"matched_description_snippet,omitempty"`
-	MatchedCommentSnippet      *string `json:"matched_comment_snippet,omitempty"`
+	MatchSource               string  `json:"match_source"`
+	MatchedSnippet            *string `json:"matched_snippet,omitempty"`
+	MatchedDescriptionSnippet *string `json:"matched_description_snippet,omitempty"`
+	MatchedCommentSnippet     *string `json:"matched_comment_snippet,omitempty"`
 }
 
 // extractSnippet extracts a snippet of text around the first occurrence of query.
@@ -741,6 +741,14 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		projectFilter = id
 	}
+	var participatedAgentFilter pgtype.UUID
+	if a := r.URL.Query().Get("participated_agent_id"); a != "" {
+		id, ok := parseUUIDOrBadRequest(w, a, "participated_agent_id")
+		if !ok {
+			return
+		}
+		participatedAgentFilter = id
+	}
 	// involves_user_id widens the assignee filter to surface issues where the
 	// user is the indirect assignee (their owned agent, or a squad they belong
 	// to / lead / have an agent inside). Direct member-assignment is excluded
@@ -758,13 +766,14 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	// open_only=true returns all non-done/cancelled issues (no limit).
 	if r.URL.Query().Get("open_only") == "true" {
 		issues, err := h.Queries.ListOpenIssues(ctx, db.ListOpenIssuesParams{
-			WorkspaceID:    wsUUID,
-			Priority:       priorityFilter,
-			AssigneeID:     assigneeFilter,
-			AssigneeIds:    assigneeIdsFilter,
-			CreatorID:      creatorFilter,
-			ProjectID:      projectFilter,
-			InvolvesUserID: involvesUserFilter,
+			WorkspaceID:         wsUUID,
+			Priority:            priorityFilter,
+			AssigneeID:          assigneeFilter,
+			AssigneeIds:         assigneeIdsFilter,
+			CreatorID:           creatorFilter,
+			ProjectID:           projectFilter,
+			ParticipatedAgentID: participatedAgentFilter,
+			InvolvesUserID:      involvesUserFilter,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -821,17 +830,18 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	issues, err := h.Queries.ListIssues(ctx, db.ListIssuesParams{
-		WorkspaceID:    wsUUID,
-		Limit:          int32(limit),
-		Offset:         int32(offset),
-		Status:         statusFilter,
-		Priority:       priorityFilter,
-		AssigneeID:     assigneeFilter,
-		AssigneeIds:    assigneeIdsFilter,
-		CreatorID:      creatorFilter,
-		ProjectID:      projectFilter,
-		InvolvesUserID: involvesUserFilter,
-		Scheduled:      scheduledFilter,
+		WorkspaceID:         wsUUID,
+		Limit:               int32(limit),
+		Offset:              int32(offset),
+		Status:              statusFilter,
+		Priority:            priorityFilter,
+		AssigneeID:          assigneeFilter,
+		AssigneeIds:         assigneeIdsFilter,
+		CreatorID:           creatorFilter,
+		ProjectID:           projectFilter,
+		ParticipatedAgentID: participatedAgentFilter,
+		InvolvesUserID:      involvesUserFilter,
+		Scheduled:           scheduledFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -840,15 +850,16 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 
 	// Get the true total count for pagination awareness.
 	total, err := h.Queries.CountIssues(ctx, db.CountIssuesParams{
-		WorkspaceID:    wsUUID,
-		Status:         statusFilter,
-		Priority:       priorityFilter,
-		AssigneeID:     assigneeFilter,
-		AssigneeIds:    assigneeIdsFilter,
-		CreatorID:      creatorFilter,
-		ProjectID:      projectFilter,
-		InvolvesUserID: involvesUserFilter,
-		Scheduled:      scheduledFilter,
+		WorkspaceID:         wsUUID,
+		Status:              statusFilter,
+		Priority:            priorityFilter,
+		AssigneeID:          assigneeFilter,
+		AssigneeIds:         assigneeIdsFilter,
+		CreatorID:           creatorFilter,
+		ProjectID:           projectFilter,
+		ParticipatedAgentID: participatedAgentFilter,
+		InvolvesUserID:      involvesUserFilter,
+		Scheduled:           scheduledFilter,
 	})
 	if err != nil {
 		total = int64(len(issues))
@@ -1040,6 +1051,16 @@ func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		where = append(where, fmt.Sprintf("i.project_id = %s::uuid", addArg(id)))
+	}
+	if raw := r.URL.Query().Get("participated_agent_id"); raw != "" {
+		id, ok := parseUUIDOrBadRequest(w, raw, "participated_agent_id")
+		if !ok {
+			return
+		}
+		where = append(where, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM comment c WHERE c.issue_id = i.id AND c.author_type = 'agent' AND c.author_id = %s::uuid)",
+			addArg(id),
+		))
 	}
 	// Mirror the involves_user_id 4-branch UNION from sqlc's ListIssues /
 	// ListOpenIssues / CountIssues. ListGroupedIssues is a hand-written dynamic
