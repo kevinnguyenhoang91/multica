@@ -360,6 +360,39 @@ func TestSubscriberAddedEventPublished(t *testing.T) {
 	}
 }
 
+func TestExtractIssueFields_MapPayloadIncludesDisplayFields(t *testing.T) {
+	issue, ok := extractIssueFields(map[string]any{
+		"id":           "issue-id",
+		"workspace_id": "ws-id",
+		"title":        "Display title",
+		"status":       "in_progress",
+		"priority":     "high",
+		"identifier":   "MUL-42",
+		"number":       int32(42),
+		"creator_type": "member",
+		"creator_id":   "user-id",
+	})
+
+	if !ok {
+		t.Fatal("expected map payload to be extracted")
+	}
+	if issue.Title != "Display title" {
+		t.Fatalf("expected title Display title, got %q", issue.Title)
+	}
+	if issue.Status != "in_progress" {
+		t.Fatalf("expected status in_progress, got %q", issue.Status)
+	}
+	if issue.Priority != "high" {
+		t.Fatalf("expected priority high, got %q", issue.Priority)
+	}
+	if issue.Identifier != "MUL-42" {
+		t.Fatalf("expected identifier MUL-42, got %q", issue.Identifier)
+	}
+	if issue.Number != 42 {
+		t.Fatalf("expected number 42, got %d", issue.Number)
+	}
+}
+
 // Autopilot publishes EventIssueCreated with a map[string]any payload (not handler.IssueResponse).
 // The listener must still subscribe the creator.
 func TestSubscriberIssueCreated_AutopilotMapPayload(t *testing.T) {
