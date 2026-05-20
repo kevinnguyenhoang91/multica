@@ -1350,6 +1350,58 @@ func TestUpdateIssueAllowsExplicitUnassign(t *testing.T) {
 	}
 }
 
+func TestUpdateIssueInReviewTransitionReassignsToCreator(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":         "handoff on in_review",
+		"status":        "in_progress",
+		"assignee_type": "agent",
+		"assignee_id":   agentID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	defer func() {
+		cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+		cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+		testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+	}()
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/issues/"+created.ID, map[string]any{
+		"status": "in_review",
+	})
+	req = withURLParam(req, "id", created.ID)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateIssue: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var updated IssueResponse
+	json.NewDecoder(w.Body).Decode(&updated)
+	if updated.Status != "in_review" {
+		t.Fatalf("expected status=in_review, got %q", updated.Status)
+	}
+	if updated.AssigneeType == nil || *updated.AssigneeType != "member" {
+		t.Fatalf("expected assignee_type=member (creator), got %v", updated.AssigneeType)
+	}
+	if updated.AssigneeID == nil || *updated.AssigneeID != testUserID {
+		t.Fatalf("expected assignee_id=%s (creator), got %v", testUserID, updated.AssigneeID)
+	}
+}
+
 func TestCommentCRUD(t *testing.T) {
 	// Create an issue first
 	w := httptest.NewRecorder()
