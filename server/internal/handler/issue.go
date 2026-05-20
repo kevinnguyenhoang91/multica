@@ -2268,6 +2268,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.enqueueReviewAssigneeOnInReviewTransition(r.Context(), prevIssue, issue, assigneeChanged, actorType, actorID)
+
 	// Trigger the assigned agent when a member moves an issue out of backlog.
 	// Backlog acts as a parking lot — moving to an active status signals the
 	// issue is ready for work.
@@ -2370,6 +2372,27 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 		return false
 	}
 	return h.isAgentAssigneeReady(ctx, issue)
+}
+
+// enqueueReviewAssigneeOnInReviewTransition re-triggers agent/squad assignees
+// when work enters review via status-only updates.
+func (h *Handler) enqueueReviewAssigneeOnInReviewTransition(
+	ctx context.Context,
+	prevIssue db.Issue,
+	issue db.Issue,
+	assigneeChanged bool,
+	actorType string,
+	actorID string,
+) {
+	if assigneeChanged || issue.Status != "in_review" || prevIssue.Status == "in_review" || prevIssue.Status == "backlog" {
+		return
+	}
+	if h.isAgentAssigneeReady(ctx, issue) {
+		h.TaskService.EnqueueTaskForIssue(ctx, issue)
+	}
+	if h.isSquadLeaderReady(ctx, issue) {
+		h.enqueueSquadLeaderTask(ctx, issue, pgtype.UUID{}, actorType, actorID)
+	}
 }
 
 // shouldEnqueueOnComment returns true if a member comment on this issue should
@@ -2687,6 +2710,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 				h.enqueueSquadLeaderTask(r.Context(), issue, pgtype.UUID{}, actorType, actorID)
 			}
 		}
+
+		h.enqueueReviewAssigneeOnInReviewTransition(r.Context(), prevIssue, issue, assigneeChanged, actorType, actorID)
 
 		// Trigger agent when moving out of backlog (batch).
 		if statusChanged && !assigneeChanged && actorType == "member" &&

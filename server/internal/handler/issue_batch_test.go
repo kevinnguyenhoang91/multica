@@ -276,6 +276,52 @@ func TestBatchUpdateToInReviewFromTodoKeepsAgentAssignee(t *testing.T) {
 	}
 }
 
+// TestBatchUpdateInReviewTransitionNotifiesAgentAssignee ensures status-only
+// transitions into in_review re-trigger queued work for agent
+// assignees in batch mode.
+func TestBatchUpdateInReviewTransitionNotifiesAgentAssignee(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	issueID := createTestIssueWithAssignee(t, "BU-review-notify-agent", "todo", "low", "agent", agentID)
+	t.Cleanup(func() { deleteTestIssue(t, issueID) })
+
+	if _, err := testPool.Exec(ctx,
+		`UPDATE agent_task_queue SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
+		issueID, agentID,
+	); err != nil {
+		t.Fatalf("cancel initial agent task: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
+		"issue_ids": []string{issueID},
+		"updates":   map[string]any{"status": "in_review"},
+	})
+	testHandler.BatchUpdateIssues(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var queued int
+	if err := testPool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
+		issueID, agentID,
+	).Scan(&queued); err != nil {
+		t.Fatalf("count queued tasks: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("expected 1 queued task for review assignee after batch in_review transition, got %d", queued)
+	}
+}
+
 // createTestIssue is a small helper to keep the table-driven cases clean.
 // Returns the new issue's id; caller is responsible for cleanup.
 func createTestIssue(t *testing.T, title, status, priority string) string {
