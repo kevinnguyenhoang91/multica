@@ -861,7 +861,7 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Comment attachments")).toBeInTheDocument();
+      expect(screen.getByText("Attachments")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Images from comments")).toBeInTheDocument();
