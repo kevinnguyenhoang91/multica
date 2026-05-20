@@ -6,11 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { Button } from "@multica/ui/components/ui/button";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { agentListOptions } from "@multica/core/workspace/queries";
+import { agentListOptions, squadListOptions } from "@multica/core/workspace/queries";
 import type { RuntimeUsage, AgentRuntime } from "@multica/core/types";
 import {
   runtimeUsageOptions,
   runtimeUsageByAgentOptions,
+  runtimeUsageBySquadOptions,
 } from "@multica/core/runtimes/queries";
 import { useCustomPricingStore } from "@multica/core/runtimes/custom-pricing-store";
 import {
@@ -20,6 +21,7 @@ import {
   aggregateByDate,
   aggregateByWeek,
   aggregateCostByAgent,
+  aggregateCostBySquad,
   aggregateCostByModel,
   collectUnmappedModels,
   pctChange,
@@ -592,7 +594,7 @@ function ChartLegend({ includeCacheRead = false }: { includeCacheRead?: boolean 
 }
 
 // ---------------------------------------------------------------------------
-// Cost-by block: two-tab attribution view (by agent / by model).
+// Cost-by block: attribution view (by agent / by squad / by model).
 // ---------------------------------------------------------------------------
 
 function CostByBlock({
@@ -605,50 +607,67 @@ function CostByBlock({
   usage: RuntimeUsage[];
 }) {
   const { t } = useT("runtimes");
-  const [tab, setTab] = useState<"agent" | "model">("agent");
+  const [tab, setTab] = useState<"agent" | "squad" | "model">("agent");
   // Memo dep — same reason as WhenChart: aggregateCostBy{Agent,Model} call
   // estimateCost, which now reads the override store.
   const pricings = useCustomPricingStore((s) => s.pricings);
 
-  // by-agent is server-side aggregation (fetched lazily on tab activation).
-  // by-model derives from the daily cache the parent already has — free.
+  // by-agent / by-squad are server-side aggregations (fetched lazily on tab
+  // activation). by-model derives from the daily cache the parent already has.
   const { data: byAgentRows = [] } = useQuery({
     ...runtimeUsageByAgentOptions(runtimeId, days),
     enabled: tab === "agent",
   });
+  const { data: bySquadRows = [] } = useQuery({
+    ...runtimeUsageBySquadOptions(runtimeId, days),
+    enabled: tab === "squad",
+  });
 
   const wsId = useWorkspaceId();
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: squads = [] } = useQuery({
+    ...squadListOptions(wsId),
+    enabled: tab === "squad",
+  });
 
   const byAgent = useMemo(
     () => aggregateCostByAgent(byAgentRows),
     [byAgentRows, pricings],
+  );
+  const bySquad = useMemo(
+    () => aggregateCostBySquad(bySquadRows),
+    [bySquadRows, pricings],
   );
   const byModel = useMemo(
     () => aggregateCostByModel(usage),
     [usage, pricings],
   );
 
+  const title =
+    tab === "agent"
+      ? t(($) => $.usage.cost_by_title_agent)
+      : tab === "squad"
+        ? t(($) => $.usage.cost_by_title_squad)
+        : t(($) => $.usage.cost_by_title_model);
   const caption =
     tab === "agent"
       ? t(($) => $.usage.cost_by_caption_agent, { count: byAgent.length })
-      : t(($) => $.usage.cost_by_caption_model, { count: byModel.length });
+      : tab === "squad"
+        ? t(($) => $.usage.cost_by_caption_squad, { count: bySquad.length })
+        : t(($) => $.usage.cost_by_caption_model, { count: byModel.length });
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-3">
-          <h4 className="text-sm font-semibold">
-            {tab === "agent"
-              ? t(($) => $.usage.cost_by_title_agent)
-              : t(($) => $.usage.cost_by_title_model)}
-          </h4>
+          <h4 className="text-sm font-semibold">{title}</h4>
           <Segmented
             value={tab}
             onChange={setTab}
             options={
               [
                 { label: t(($) => $.usage.cost_by_tab_agent), value: "agent" },
+                { label: t(($) => $.usage.cost_by_tab_squad), value: "squad" },
                 { label: t(($) => $.usage.cost_by_tab_model), value: "model" },
               ] as const
             }
@@ -671,6 +690,16 @@ function CostByBlock({
                 </div>
               );
             }}
+          />
+        )}
+        {tab === "squad" && (
+          <CostByList
+            rows={bySquad}
+            renderKey={(key) => (
+              <span className="truncate text-sm font-medium">
+                {squads.find((s) => s.id === key)?.name ?? key}
+              </span>
+            )}
           />
         )}
         {tab === "model" && (
@@ -867,4 +896,3 @@ function computeTotals(rows: RuntimeUsage[]): UsageTotals {
     { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, cacheSavings: 0 },
   );
 }
-

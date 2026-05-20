@@ -9,6 +9,8 @@ export const runtimeKeys = {
     ["runtimes", "usage", rid, days] as const,
   usageByAgent: (rid: string, days: number) =>
     ["runtimes", "usage", "by-agent", rid, days] as const,
+  usageBySquad: (rid: string, days: number) =>
+    ["runtimes", "usage", "by-squad", rid, days] as const,
   usageByHour: (rid: string, days: number) =>
     ["runtimes", "usage", "by-hour", rid, days] as const,
   latestVersion: () => ["runtimes", "latestVersion"] as const,
@@ -33,6 +35,15 @@ export function runtimeUsageByAgentOptions(runtimeId: string, days: number) {
   return queryOptions({
     queryKey: runtimeKeys.usageByAgent(runtimeId, days),
     queryFn: () => api.getRuntimeUsageByAgent(runtimeId, { days }),
+    staleTime: 60 * 1000,
+  });
+}
+
+// Per-squad token totals for one runtime — drives the "Cost by squad" tab.
+export function runtimeUsageBySquadOptions(runtimeId: string, days: number) {
+  return queryOptions({
+    queryKey: runtimeKeys.usageBySquad(runtimeId, days),
+    queryFn: () => api.getRuntimeUsageBySquad(runtimeId, { days }),
     staleTime: 60 * 1000,
   });
 }
