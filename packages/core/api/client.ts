@@ -49,6 +49,7 @@ import type {
   IssueUsageSummary,
   RuntimeHourlyActivity,
   RuntimeUsageByAgent,
+  RuntimeUsageBySquad,
   RuntimeUsageByHour,
   DashboardUsageDaily,
   DashboardUsageByAgent,
@@ -1210,6 +1211,15 @@ export class ApiClient {
       [],
       { endpoint: "GET /api/runtimes/:id/usage/by-agent" },
     );
+  }
+
+  async getRuntimeUsageBySquad(
+    runtimeId: string,
+    params?: { days?: number },
+  ): Promise<RuntimeUsageBySquad[]> {
+    const search = new URLSearchParams();
+    if (params?.days) search.set("days", String(params.days));
+    return this.fetch(`/api/runtimes/${runtimeId}/usage/by-squad?${search}`);
   }
 
   async getRuntimeUsageByHour(
