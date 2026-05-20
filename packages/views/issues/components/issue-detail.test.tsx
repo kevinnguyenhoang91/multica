@@ -111,10 +111,13 @@ vi.mock("../../navigation", () => ({
 }));
 
 // Mock editor components (Tiptap requires real DOM)
-vi.mock("../../editor", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../editor")>();
+vi.mock("../../editor", async () => {
+  const { AttachmentDownloadProvider } = await vi.importActual<
+    typeof import("../../editor/attachment-download-context")
+  >("../../editor/attachment-download-context");
+
   return {
-    ...actual,
+    AttachmentDownloadProvider,
     useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
     FileDropOverlay: () => null,
     // No-op so comment-card's AttachmentList can render without hitting the
@@ -129,6 +132,9 @@ vi.mock("../../editor", async (importOriginal) => {
       modal: null,
     }),
     isPreviewable: () => false,
+    Attachment: ({ attachment }: { attachment: { name?: string } }) => (
+      <div>{attachment.name ?? "attachment"}</div>
+    ),
     ReadonlyContent: ({ content }: { content: string }) => (
       <div data-testid="readonly-content">{content}</div>
     ),
@@ -140,7 +146,10 @@ vi.mock("../../editor", async (importOriginal) => {
       const [value, setValue] = useState(defaultValue || "");
       useImperativeHandle(ref, () => ({
         getMarkdown: () => valueRef.current,
-        clearContent: () => { valueRef.current = ""; setValue(""); },
+        clearContent: () => {
+          valueRef.current = "";
+          setValue("");
+        },
         focus: () => {},
         uploadFile: () => {},
       }));
@@ -181,9 +190,6 @@ vi.mock("../../editor", async (importOriginal) => {
         />
       );
     }),
-    // Pass-through provider so comment-card's AttachmentList can render with
-    // attachment download wiring without hitting the real context singleton.
-    AttachmentDownloadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
 
@@ -820,7 +826,7 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Comment attachments")).toBeInTheDocument();
+      expect(screen.getByText("Attachments")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Images from comments")).toBeInTheDocument();
