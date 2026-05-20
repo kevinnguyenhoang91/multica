@@ -520,18 +520,6 @@ export function AgentCreatePanel({
               />
               {t(($) => $.create_issue.create_another)}
             </label>
-            <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-              <Switch
-                size="sm"
-                checked={useSandbox}
-                onCheckedChange={(v) => {
-                  setUseSandbox(v);
-                  setPersistedUseSandbox(v);
-                }}
-                aria-label={t(($) => $.create_issue.sandbox_toggle)}
-              />
-              {t(($) => $.create_issue.sandbox_toggle)}
-            </label>
             <Button
               size="sm"
               onClick={submit}
