@@ -12,6 +12,8 @@ export const runtimeKeys = {
   // by-hour now follows the viewer's tz, like the other reports.
   usageByHour: (rid: string, days: number, tz: string) =>
     ["runtimes", "usage", "by-hour", rid, days, tz] as const,
+  usageBySquad: (rid: string, days: number,tz: string) =>
+    ["runtimes", "usage", "by-squad", rid, days, tz] as const,
   latestVersion: () => ["runtimes", "latestVersion"] as const,
 };
 
@@ -40,10 +42,20 @@ export function runtimeUsageByAgentOptions(
   });
 }
 
+// Hourly (0..23) token totals for one runtime — drives the "By hour" tab.
 export function runtimeUsageByHourOptions(runtimeId: string, days: number, tz: string) {
   return queryOptions({
     queryKey: runtimeKeys.usageByHour(runtimeId, days, tz),
     queryFn: () => api.getRuntimeUsageByHour(runtimeId, { days, tz }),
+    staleTime: 60 * 1000,
+  });
+}
+
+// Per-squad token totals for one runtime — drives the "Cost by squad" tab.
+export function runtimeUsageBySquadOptions(runtimeId: string, days: number, tz: string) {
+  return queryOptions({
+    queryKey: runtimeKeys.usageBySquad(runtimeId, days, tz),
+    queryFn: () => api.getRuntimeUsageBySquad(runtimeId, { days, tz }),
     staleTime: 60 * 1000,
   });
 }
