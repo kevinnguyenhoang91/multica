@@ -1482,56 +1482,34 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           {pullRequestsOpen && <div className="pl-2"><PullRequestList issueId={id} commentPullRequestUrls={commentLinks.pullRequests} /></div>}
         </div>
       )}
-      {/* Comment links */}
+      {/* Resources — non-PR links extracted from comments */}
       <div>
         <button
           className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${commentLinksOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setCommentLinksOpen(!commentLinksOpen)}
         >
-          {t(($) => $.detail.section_comment_links)}
+          {t(($) => $.detail.section_resources)}
           <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${commentLinksOpen ? "rotate-90" : ""}`} />
         </button>
         {commentLinksOpen && (
           <div className="pl-2 space-y-2">
-            {commentLinks.pullRequests.length === 0 && commentLinks.otherLinks.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-2">{t(($) => $.detail.comment_links_empty)}</p>
+            {commentLinks.otherLinks.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2">{t(($) => $.detail.resources_empty)}</p>
             ) : (
-              <>
-                {commentLinks.pullRequests.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_links_pull_requests)}</p>
-                    {commentLinks.pullRequests.map((url) => (
-                      <a
-                        key={url}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
-                      >
-                        <LinkIcon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate group-hover:text-foreground">{displayUrl(url)}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-                {commentLinks.otherLinks.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="px-2 text-[11px] text-muted-foreground">{t(($) => $.detail.comment_links_external)}</p>
-                    {commentLinks.otherLinks.map((url) => (
-                      <a
-                        key={url}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
-                      >
-                        <LinkIcon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate group-hover:text-foreground">{displayUrl(url)}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </>
+              <div className="space-y-1">
+                {commentLinks.otherLinks.map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors group"
+                  >
+                    <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate group-hover:text-foreground">{displayUrl(url)}</span>
+                  </a>
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -1588,18 +1566,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             )}
           </div>
         )}
-      </div>
-
-      {/* Pull requests */}
-      <div>
-        <button
-          className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${pullRequestsOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
-          onClick={() => setPullRequestsOpen(!pullRequestsOpen)}
-        >
-          {t(($) => $.detail.section_pull_requests)}
-          <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${pullRequestsOpen ? "rotate-90" : ""}`} />
-        </button>
-        {pullRequestsOpen && <div className="pl-2"><PullRequestList issueId={id} /></div>}
       </div>
 
       {/* Details */}
