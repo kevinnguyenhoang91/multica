@@ -1515,6 +1515,145 @@ func TestUpdateIssueToInReviewFromTodoKeepsAgentAssignee(t *testing.T) {
 	}
 }
 
+// TestUpdateIssueInReviewTransitionNotifiesAgentAssignee ensures a status-only
+// transition into in_review re-triggers the assigned agent so review
+// work is acknowledged even when assignee fields are unchanged.
+func TestUpdateIssueInReviewTransitionNotifiesAgentAssignee(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":         "agent review notify on in_review",
+		"status":        "todo",
+		"assignee_type": "agent",
+		"assignee_id":   agentID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	defer func() {
+		cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+		cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+		testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+	}()
+
+	// Drop the creation-triggered task so only the in_review transition can
+	// produce the next queued row.
+	if _, err := testPool.Exec(ctx,
+		`UPDATE agent_task_queue SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
+		created.ID, agentID,
+	); err != nil {
+		t.Fatalf("cancel initial agent task: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/issues/"+created.ID, map[string]any{
+		"status": "in_review",
+	})
+	req = withURLParam(req, "id", created.ID)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateIssue: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var queued int
+	if err := testPool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
+		created.ID, agentID,
+	).Scan(&queued); err != nil {
+		t.Fatalf("count queued tasks: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("expected 1 queued task for review assignee after in_review transition, got %d", queued)
+	}
+}
+
+// TestUpdateIssueInReviewTransitionNotifiesSquadLeader mirrors the agent case:
+// a status-only transition into in_review on a squad-assigned issue
+// should enqueue the squad leader to pick up review.
+func TestUpdateIssueInReviewTransitionNotifiesSquadLeader(t *testing.T) {
+	ctx := context.Background()
+	var leaderID string
+	if err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 ORDER BY created_at ASC LIMIT 1`,
+		testWorkspaceID,
+	).Scan(&leaderID); err != nil {
+		t.Fatalf("load test agent leader: %v", err)
+	}
+
+	var squadID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO squad (workspace_id, name, description, leader_id, creator_id)
+		VALUES ($1, $2, '', $3, $4)
+		RETURNING id
+	`, testWorkspaceID, "InReview Notify Squad", leaderID, testUserID).Scan(&squadID); err != nil {
+		t.Fatalf("create squad: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := testPool.Exec(ctx, `DELETE FROM squad WHERE id = $1`, squadID); err != nil {
+			t.Fatalf("delete squad: %v", err)
+		}
+	})
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":         "squad review notify on in_review",
+		"status":        "todo",
+		"assignee_type": "squad",
+		"assignee_id":   squadID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	defer func() {
+		cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+		cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+		testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+	}()
+
+	if _, err := testPool.Exec(ctx,
+		`UPDATE agent_task_queue SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
+		created.ID, leaderID,
+	); err != nil {
+		t.Fatalf("cancel initial squad-leader task: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/issues/"+created.ID, map[string]any{
+		"status": "in_review",
+	})
+	req = withURLParam(req, "id", created.ID)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateIssue: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var queued int
+	if err := testPool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
+		created.ID, leaderID,
+	).Scan(&queued); err != nil {
+		t.Fatalf("count queued squad-leader tasks: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("expected 1 queued squad-leader task after in_review transition, got %d", queued)
+	}
+}
+
 func TestCommentCRUD(t *testing.T) {
 	// Create an issue first
 	w := httptest.NewRecorder()

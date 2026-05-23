@@ -276,6 +276,111 @@ func TestBatchUpdateToInReviewFromTodoKeepsAgentAssignee(t *testing.T) {
 	}
 }
 
+// TestBatchUpdateInReviewTransitionNotifiesAgentAssignee ensures status-only
+// transitions into in_review re-trigger queued work for agent
+// assignees in batch mode.
+func TestBatchUpdateInReviewTransitionNotifiesAgentAssignee(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	issueID := createTestIssueWithAssignee(t, "BU-review-notify-agent", "todo", "low", "agent", agentID)
+	t.Cleanup(func() { deleteTestIssue(t, issueID) })
+
+	if _, err := testPool.Exec(ctx,
+		`UPDATE agent_task_queue SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
+		issueID, agentID,
+	); err != nil {
+		t.Fatalf("cancel initial agent task: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
+		"issue_ids": []string{issueID},
+		"updates":   map[string]any{"status": "in_review"},
+	})
+	testHandler.BatchUpdateIssues(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var queued int
+	if err := testPool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
+		issueID, agentID,
+	).Scan(&queued); err != nil {
+		t.Fatalf("count queued tasks: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("expected 1 queued task for review assignee after batch in_review transition, got %d", queued)
+	}
+}
+
+// TestBatchUpdateInReviewTransitionNotifiesSquadLeader ensures status-only
+// batch transitions into in_review re-trigger the squad leader when the
+// issue is squad-assigned.
+func TestBatchUpdateInReviewTransitionNotifiesSquadLeader(t *testing.T) {
+	ctx := context.Background()
+	var leaderID string
+	if err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 ORDER BY created_at ASC LIMIT 1`,
+		testWorkspaceID,
+	).Scan(&leaderID); err != nil {
+		t.Fatalf("load test agent leader: %v", err)
+	}
+
+	var squadID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO squad (workspace_id, name, description, leader_id, creator_id)
+		VALUES ($1, $2, '', $3, $4)
+		RETURNING id
+	`, testWorkspaceID, "BU InReview Notify Squad", leaderID, testUserID).Scan(&squadID); err != nil {
+		t.Fatalf("create squad: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := testPool.Exec(ctx, `DELETE FROM squad WHERE id = $1`, squadID); err != nil {
+			t.Fatalf("delete squad: %v", err)
+		}
+	})
+
+	issueID := createTestIssueWithAssignee(t, "BU-review-notify-squad", "todo", "low", "squad", squadID)
+	t.Cleanup(func() { deleteTestIssue(t, issueID) })
+
+	if _, err := testPool.Exec(ctx,
+		`UPDATE agent_task_queue SET status = 'cancelled' WHERE issue_id = $1 AND agent_id = $2`,
+		issueID, leaderID,
+	); err != nil {
+		t.Fatalf("cancel initial squad-leader task: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
+		"issue_ids": []string{issueID},
+		"updates":   map[string]any{"status": "in_review"},
+	})
+	testHandler.BatchUpdateIssues(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var queued int
+	if err := testPool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'`,
+		issueID, leaderID,
+	).Scan(&queued); err != nil {
+		t.Fatalf("count queued squad-leader tasks: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("expected 1 queued squad-leader task after batch in_review transition, got %d", queued)
+	}
+}
+
 // createTestIssue is a small helper to keep the table-driven cases clean.
 // Returns the new issue's id; caller is responsible for cleanup.
 func createTestIssue(t *testing.T, title, status, priority string) string {
