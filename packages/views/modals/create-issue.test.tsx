@@ -593,6 +593,34 @@ describe("CreateIssueModal", () => {
     );
   });
 
+  it("forwards use_sandbox from agent mode when switching back to agent", async () => {
+    const user = userEvent.setup();
+    const onSwitchMode = vi.fn();
+
+    renderModal(
+      <ManualCreatePanel
+        onClose={vi.fn()}
+        onSwitchMode={onSwitchMode}
+        data={{ use_sandbox: false }}
+        isExpanded={false}
+        setIsExpanded={vi.fn()}
+        backlogHintIssueId={null}
+        setBacklogHintIssueId={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Issue title"), "Refactor auth");
+    await user.click(screen.getByRole("button", { name: /Switch to Agent/i }));
+
+    expect(onSwitchMode).toHaveBeenCalledTimes(1);
+    expect(onSwitchMode.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        prompt: "Refactor auth",
+        use_sandbox: false,
+      }),
+    );
+  });
+
   // Title + description are packed into the agent prompt on switch; if we
   // leave them in the shared draft store, the next agent→manual switch
   // surfaces the stale manual draft on top of the prompt-as-description,

@@ -61,6 +61,8 @@ function makeRuntime(overrides: Partial<RuntimeDevice> = {}): RuntimeDevice {
     device_info: "host",
     metadata: {},
     owner_id: "user-1",
+    visibility: "private",
+    timezone: "UTC",
     last_seen_at: "2026-04-16T00:00:00Z",
     created_at: "2026-04-16T00:00:00Z",
     updated_at: "2026-04-16T00:00:00Z",

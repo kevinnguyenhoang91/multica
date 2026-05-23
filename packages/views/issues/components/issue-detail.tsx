@@ -64,7 +64,7 @@ import { useAuthStore } from "@multica/core/auth";
 import { useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { issueListOptions, issueDetailOptions, childIssuesOptions, issueUsageOptions, issueAttachmentsOptions } from "@multica/core/issues/queries";
+import { issueListOptions, issueDetailOptions, childIssuesOptions, issueUsageOptions, issueAttachmentsOptions, issueKeys } from "@multica/core/issues/queries";
 import { projectDetailOptions } from "@multica/core/projects/queries";
 import { ProjectIcon } from "../../projects/components/project-icon";
 import { issueLabelsOptions } from "@multica/core/labels";
@@ -173,6 +173,17 @@ function shortDate(date: string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function readSandboxResult(result: unknown): { mode?: string; sandboxed?: boolean } | null {
+  if (!result || typeof result !== "object") return null;
+  const sandbox = (result as Record<string, unknown>).sandbox;
+  if (!sandbox || typeof sandbox !== "object") return null;
+  const obj = sandbox as Record<string, unknown>;
+  return {
+    mode: typeof obj.mode === "string" ? obj.mode : undefined,
+    sandboxed: typeof obj.sandboxed === "boolean" ? obj.sandboxed : undefined,
+  };
 }
 
 type ActivityT = ReturnType<typeof useT<"issues">>["t"];
@@ -835,6 +846,44 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
       return cached?.description != null ? cached : undefined;
     },
   });
+  const { data: issueTasks = [] } = useQuery({
+    queryKey: issueKeys.tasks(id),
+    queryFn: () => api.listTasksByIssue(id),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const assigneeAgent = useMemo(() => {
+    if (!issue || issue.assignee_type !== "agent" || !issue.assignee_id) return null;
+    return agents.find((a) => a.id === issue.assignee_id) ?? null;
+  }, [issue, agents]);
+  const latestSandboxEnabledTask = useMemo(() => {
+    const sandboxEnabledTasks = issueTasks
+      .filter((task) => {
+        const taskAny = task as unknown as Record<string, unknown>;
+        return taskAny.use_sandbox === true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    return sandboxEnabledTasks[0] ?? null;
+  }, [issueTasks]);
+  const sandboxInfo = useMemo(() => {
+    if (!latestSandboxEnabledTask) return null;
+    const taskAny = latestSandboxEnabledTask as unknown as Record<string, unknown>;
+    const runtimeMode =
+      typeof taskAny.runtime_mode === "string"
+        ? taskAny.runtime_mode
+        : assigneeAgent?.runtime_mode;
+    const sandboxResult = readSandboxResult(latestSandboxEnabledTask.result);
+    return {
+      runtimeMode,
+      runtimeId: latestSandboxEnabledTask.runtime_id || assigneeAgent?.runtime_id || "",
+      workDir: latestSandboxEnabledTask.work_dir || "",
+      mode: sandboxResult?.mode,
+      sandboxed: sandboxResult?.sandboxed,
+    };
+  }, [latestSandboxEnabledTask, assigneeAgent]);
 
   // Record recent visit
   const recordVisit = useRecentIssuesStore((s) => s.recordVisit);
@@ -1383,6 +1432,39 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 defaultOpen={autoOpenProp === "labels"}
               />
             </PropRow>
+          )}
+          {sandboxInfo && (
+            <>
+              <div className="col-span-2 mt-2 border-t border-border/60 pt-2">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  {t(($) => $.detail.section_sandboxing)}
+                </p>
+              </div>
+              <PropRow label={t(($) => $.detail.prop_sandbox_status)}>
+                <span className="text-xs">{t(($) => $.detail.sandbox_enabled)}</span>
+              </PropRow>
+              {(sandboxInfo.mode || typeof sandboxInfo.sandboxed === "boolean") && (
+                <PropRow label={t(($) => $.detail.prop_sandbox_mode)}>
+                  <span className="text-xs text-muted-foreground">
+                    {sandboxInfo.mode ?? (sandboxInfo.sandboxed ? "sandboxed" : "not sandboxed")}
+                  </span>
+                </PropRow>
+              )}
+              {(sandboxInfo.runtimeMode || sandboxInfo.runtimeId) && (
+                <PropRow label={t(($) => $.detail.prop_sandbox_environment)}>
+                  <span className="text-xs text-muted-foreground">
+                    {[sandboxInfo.runtimeMode, sandboxInfo.runtimeId].filter(Boolean).join(" · ")}
+                  </span>
+                </PropRow>
+              )}
+              {sandboxInfo.workDir && (
+                <PropRow label={t(($) => $.detail.prop_sandbox_workdir)}>
+                  <span className="text-xs text-muted-foreground truncate" title={sandboxInfo.workDir}>
+                    {sandboxInfo.workDir}
+                  </span>
+                </PropRow>
+              )}
+            </>
           )}
 
           {/* "+ Add property" — opens a Popover listing optional fields

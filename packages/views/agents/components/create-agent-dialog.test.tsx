@@ -109,6 +109,8 @@ function makeTemplate(runtimeId: string): Agent {
     custom_env: {},
     custom_args: [],
     custom_env_redacted: false,
+    mcp_config: null,
+    mcp_config_redacted: false,
     visibility: "private",
     status: "idle",
     max_concurrent_tasks: 1,
