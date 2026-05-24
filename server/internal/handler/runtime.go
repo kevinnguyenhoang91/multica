@@ -280,7 +280,10 @@ func (h *Handler) GetRuntimeUsageBySquad(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	since := parseSinceParamInTZ(r, 30, rt.Timezone)
+	// No date bucketing — tz only sets the cutoff boundary so "last 30
+	// days" means 30 of the viewer's days.
+	viewTZ := h.resolveViewingTZ(r)
+	since := parseSinceParamInTZ(r, 30, viewTZ)
 
 	rows, err := h.Queries.ListRuntimeUsageBySquad(r.Context(), db.ListRuntimeUsageBySquadParams{
 		RuntimeID:   runtimeUUID,
