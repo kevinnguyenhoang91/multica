@@ -127,6 +127,8 @@ export interface Agent {
   custom_args: string[];
   custom_env_redacted: boolean;
   custom_env_redacted_reason?: 'policy' | 'role';
+  mcp_config: Record<string, unknown> | null;
+  mcp_config_redacted: boolean;
   visibility: AgentVisibility;
   status: AgentStatus;
   max_concurrent_tasks: number;
@@ -172,6 +174,7 @@ export interface CreateAgentRequest {
   runtime_config?: Record<string, unknown>;
   custom_env?: Record<string, string>;
   custom_args?: string[];
+  mcp_config?: Record<string, unknown> | null;
   visibility?: AgentVisibility;
   max_concurrent_tasks?: number;
   model?: string;
@@ -261,6 +264,7 @@ export interface UpdateAgentRequest {
   runtime_config?: Record<string, unknown>;
   custom_env?: Record<string, string>;
   custom_args?: string[];
+  mcp_config?: Record<string, unknown> | null;
   visibility?: AgentVisibility;
   status?: AgentStatus;
   max_concurrent_tasks?: number;

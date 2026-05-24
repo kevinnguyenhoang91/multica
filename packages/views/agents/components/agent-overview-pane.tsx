@@ -7,6 +7,7 @@ import {
   FileText,
   KeyRound,
   ListTodo,
+  PlugZap,
   Terminal,
 } from "lucide-react";
 import type { Agent, AgentRuntime } from "@multica/core/types";
@@ -26,6 +27,7 @@ import { SkillsTab } from "./tabs/skills-tab";
 import { EnvTab } from "./tabs/env-tab";
 import { CustomArgsTab } from "./tabs/custom-args-tab";
 import { ActorIssuesPanel } from "../../common/actor-issues-panel";
+import { McpConfigTab } from "./tabs/mcp-config-tab";
 import { useT } from "../../i18n";
 
 type DetailTab =
@@ -34,14 +36,16 @@ type DetailTab =
   | "instructions"
   | "skills"
   | "env"
+  | "mcp"
   | "custom_args";
 
-const TAB_LABEL_KEY: Record<DetailTab, "activity" | "tasks" | "instructions" | "skills" | "environment" | "custom_args"> = {
+const TAB_LABEL_KEY: Record<DetailTab, "activity" | "tasks" | "instructions" | "skills" | "mcp" | "environment" | "custom_args"> = {
   activity: "activity",
   tasks: "tasks",
   instructions: "instructions",
   skills: "skills",
   env: "environment",
+  mcp: "mcp",
   custom_args: "custom_args",
 };
 
@@ -54,6 +58,7 @@ const detailTabs: {
   { id: "instructions", icon: FileText },
   { id: "skills", icon: BookOpenText },
   { id: "env", icon: KeyRound },
+  { id: "mcp", icon: PlugZap },
   { id: "custom_args", icon: Terminal },
 ];
 
@@ -69,7 +74,7 @@ interface AgentOverviewPaneProps {
  *   - Activity (default) — what the agent is doing now / how it's been doing /
  *     what it just finished. The "watch state" surface.
  *   - Tasks — assigned/created issues using the shared issue board/list.
- *   - Instructions / Skills / Env / Custom Args — four editing surfaces.
+ *   - Instructions / Skills / Env / Custom Argsi / MCP — four editing surfaces.
  *
  * The previous Settings tab was deleted because every field on it is now
  * inline-editable in the inspector (left column) — runtime / model /
@@ -172,6 +177,17 @@ export function AgentOverviewPane({
             <EnvTab
               agent={agent}
               readOnly={agent.custom_env_redacted}
+              onSave={(updates) => onUpdate(agent.id, updates)}
+              onDirtyChange={setActiveDirty}
+            />
+          </TabContent>
+        )}
+        {activeTab === "mcp" && (
+          <TabContent>
+            <McpConfigTab
+              agent={agent}
+              runtimeDevice={runtime ?? undefined}
+              readOnly={!!agent.mcp_config_redacted}
               onSave={(updates) => onUpdate(agent.id, updates)}
               onDirtyChange={setActiveDirty}
             />
