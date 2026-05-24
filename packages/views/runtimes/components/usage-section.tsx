@@ -622,7 +622,7 @@ function CostByBlock({
     enabled: tab === "agent",
   });
   const { data: bySquadRows = [] } = useQuery({
-    ...runtimeUsageBySquadOptions(runtimeId, days),
+    ...runtimeUsageBySquadOptions(runtimeId, days, tz),
     enabled: tab === "squad",
   });
 
