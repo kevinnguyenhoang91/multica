@@ -118,7 +118,6 @@ export const BoardCardContent = memo(function BoardCardContent({
       ? getActorName(issue.assignee_type, issue.assignee_id)
       : null;
 
-  const priorityLabel = t(($) => $.priority[issue.priority]);
   const priorityIconNode = showPriority ? (
     editable ? (
       <PickerWrapper>

@@ -38,6 +38,7 @@ type Task struct {
 	RuntimeID               string                `json:"runtime_id"`
 	IssueID                 string                `json:"issue_id"`
 	WorkspaceID             string                `json:"workspace_id"`
+	WorkspaceContext        string                `json:"workspace_context,omitempty"`
 	Agent                   *AgentData            `json:"agent,omitempty"`
 	Repos                   []RepoData            `json:"repos,omitempty"`
 	ProjectID               string                `json:"project_id,omitempty"`        // issue's project, when present

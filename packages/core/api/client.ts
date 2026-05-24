@@ -889,10 +889,11 @@ export class ApiClient {
 
   async getRuntimeUsageBySquad(
     runtimeId: string,
-    params?: { days?: number },
+    params?: { days?: number, tz?: string },
   ): Promise<RuntimeUsageBySquad[]> {
     const search = new URLSearchParams();
     if (params?.days) search.set("days", String(params.days));
+    if (params?.tz) search.set("tz", params.tz);
     return this.fetch(`/api/runtimes/${runtimeId}/usage/by-squad?${search}`);
   }
 
