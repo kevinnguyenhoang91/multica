@@ -101,6 +101,10 @@
       "created": {
         "label": "Created",
         "description": "Issues created by this member or agent"
+      },
+      "participated": {
+        "label": "Participated",
+        "description": "Issues this agent has commented on"
       }
     },
     "empty": {
@@ -111,6 +115,10 @@
       "created": {
         "title": "No created issues",
         "description": "Issues created here will appear in this view."
+      },
+      "participated": {
+        "title": "No participated issues",
+        "description": "Issues this agent comments on will appear in this view."
       }
     },
     "search_placeholder": "Search issues...",
@@ -143,13 +151,12 @@
     "section_parent_issue": "Parent issue",
     "section_comment_links": "Comment links",
     "section_comment_attachments": "Attachments",
+    "section_resources": "Resources",
     "section_pull_requests": "Pull requests",
     "section_metadata": "Metadata",
     "section_details": "Details",
     "section_token_usage": "Token usage",
-    "comment_links_empty": "No links found in comments yet.",
-    "comment_links_pull_requests": "Pull requests from comments",
-    "comment_links_external": "Other links from comments",
+    "resources_empty": "No resources found in comments yet.",
     "comment_attachments_empty": "No attachments found in comments yet.",
     "comment_attachments_images": "Images from comments",
     "comment_attachments_files": "Other attachments from comments",

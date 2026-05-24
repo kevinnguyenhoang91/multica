@@ -115,22 +115,18 @@ vi.mock("../../editor", async () => {
   const { AttachmentDownloadProvider } = await vi.importActual<
     typeof import("../../editor/attachment-download-context")
   >("../../editor/attachment-download-context");
+  const actual = await importOriginal<typeof import("../../editor")>();
 
   return {
+    ...actual,
     AttachmentDownloadProvider,
-    useFileDropZone: () => ({ isDragOver: false, dropZoneProps: {} }),
-    FileDropOverlay: () => null,
-    // No-op so comment-card's AttachmentList can render without hitting the
-    // real API singleton; tests that care about download wiring should write
-    // dedicated specs against `use-download-attachment.test.tsx`.
-    useDownloadAttachment: () => mockDownloadAttachment,
+    }),
     // Inert preview hook — comment-card's AttachmentList uses it to gate the
     // Eye button. Dedicated coverage lives in attachment-preview-modal.test.tsx.
     useAttachmentPreview: () => ({
       open: vi.fn(),
       tryOpen: () => false,
       modal: null,
-    }),
     isPreviewable: () => false,
     ReadonlyContent: ({ content }: { content: string }) => (
       <div data-testid="readonly-content">{content}</div>
@@ -187,6 +183,9 @@ vi.mock("../../editor", async () => {
         />
       );
     }),
+    // Pass-through provider so comment-card's AttachmentList can render with
+    // attachment download wiring without hitting the real context singleton.
+    AttachmentDownloadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
 
@@ -780,15 +779,17 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Comment links")).toBeInTheDocument();
+      expect(screen.getByText("Resources")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Pull requests from comments")).toBeInTheDocument();
-    expect(screen.getByText("Other links from comments")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "github.com/acme/multica/pull/42" }))
-      .toHaveAttribute("href", "https://github.com/acme/multica/pull/42");
+    // The PR link from comments is now folded into the Pull requests section,
+    // not shown as a subgroup inside Resources.
+    expect(screen.queryByText("Pull requests from comments")).not.toBeInTheDocument();
+    expect(screen.queryByText("Other links from comments")).not.toBeInTheDocument();
+    // The non-PR link should appear in Resources.
     expect(screen.getByRole("link", { name: "docs.example.com/spec" }))
       .toHaveAttribute("href", "https://docs.example.com/spec");
+    // The PR link from comments should be deduplicated (only one anchor for it).
     expect(screen.getAllByRole("link", { name: "github.com/acme/multica/pull/42" })).toHaveLength(1);
   });
 

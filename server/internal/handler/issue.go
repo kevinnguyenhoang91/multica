@@ -198,10 +198,10 @@ func assigneeGroupID(assigneeType pgtype.Text, assigneeID pgtype.UUID) string {
 // SearchIssueResponse extends IssueResponse with search metadata.
 type SearchIssueResponse struct {
 	IssueResponse
-	MatchSource                string  `json:"match_source"`
-	MatchedSnippet             *string `json:"matched_snippet,omitempty"`
-	MatchedDescriptionSnippet  *string `json:"matched_description_snippet,omitempty"`
-	MatchedCommentSnippet      *string `json:"matched_comment_snippet,omitempty"`
+	MatchSource               string  `json:"match_source"`
+	MatchedSnippet            *string `json:"matched_snippet,omitempty"`
+	MatchedDescriptionSnippet *string `json:"matched_description_snippet,omitempty"`
+	MatchedCommentSnippet     *string `json:"matched_comment_snippet,omitempty"`
 }
 
 // extractSnippet extracts a snippet of text around the first occurrence of query.
@@ -748,6 +748,14 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		projectFilter = id
 	}
+	var participatedAgentFilter pgtype.UUID
+	if a := r.URL.Query().Get("participated_agent_id"); a != "" {
+		id, ok := parseUUIDOrBadRequest(w, a, "participated_agent_id")
+		if !ok {
+			return
+		}
+		participatedAgentFilter = id
+	}
 	// involves_user_id widens the assignee filter to surface issues where the
 	// user is the indirect assignee (their owned agent, or a squad they belong
 	// to / lead / have an agent inside). Direct member-assignment is excluded
@@ -778,6 +786,7 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 			ProjectID:      projectFilter,
 			InvolvesUserID: involvesUserFilter,
 			MetadataFilter: metadataFilter,
+			ParticipatedAgentID: participatedAgentFilter,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -846,6 +855,7 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		InvolvesUserID: involvesUserFilter,
 		Scheduled:      scheduledFilter,
 		MetadataFilter: metadataFilter,
+		ParticipatedAgentID: participatedAgentFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -864,6 +874,7 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		InvolvesUserID: involvesUserFilter,
 		Scheduled:      scheduledFilter,
 		MetadataFilter: metadataFilter,
+		ParticipatedAgentID: participatedAgentFilter,
 	})
 	if err != nil {
 		total = int64(len(issues))
@@ -1060,6 +1071,16 @@ func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if filter != nil {
 		where = append(where, fmt.Sprintf("i.metadata @> %s::jsonb", addArg(string(filter))))
+	}
+	if raw := r.URL.Query().Get("participated_agent_id"); raw != "" {
+		id, ok := parseUUIDOrBadRequest(w, raw, "participated_agent_id")
+		if !ok {
+			return
+		}
+		where = append(where, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM comment c WHERE c.issue_id = i.id AND c.author_type = 'agent' AND c.author_id = %s::uuid)",
+			addArg(id),
+		))
 	}
 	// Mirror the involves_user_id 4-branch UNION from sqlc's ListIssues /
 	// ListOpenIssues / CountIssues. ListGroupedIssues is a hand-written dynamic
@@ -2014,6 +2035,18 @@ type UpdateIssueRequest struct {
 	AttachmentIDs []string `json:"attachment_ids"`
 }
 
+func shouldHandoffToCreatorOnInReviewTransition(prevIssue db.Issue, nextStatus pgtype.Text) bool {
+	return nextStatus.Valid && nextStatus.String == "in_review" && prevIssue.Status != "in_review"
+}
+
+func applyCreatorOwnershipHandoffOnInReviewTransition(params *db.UpdateIssueParams, prevIssue db.Issue) {
+	if !shouldHandoffToCreatorOnInReviewTransition(prevIssue, params.Status) {
+		return
+	}
+	params.AssigneeType = pgtype.Text{String: prevIssue.CreatorType, Valid: true}
+	params.AssigneeID = prevIssue.CreatorID
+}
+
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	prevIssue, ok := h.loadIssueForUser(w, r, id)
@@ -2161,6 +2194,10 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Any transition into in_review hands ownership back to the creator,
+	// regardless of whether assignee fields were explicitly provided.
+	applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
+
 	// Validate the resulting (assignee_type, assignee_id) pair when the caller
 	// touches either field. Existing data on the issue is left alone if the
 	// caller is not changing it.
@@ -2193,8 +2230,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	resp := issueToResponse(issue, prefix)
 	slog.Info("issue updated", append(logger.RequestAttrs(r), "issue_id", id, "workspace_id", workspaceID)...)
 
-	assigneeChanged := (req.AssigneeType != nil || req.AssigneeID != nil) &&
-		(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
+	assigneeChanged := prevIssue.AssigneeType.String != issue.AssigneeType.String ||
+		uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID)
 	statusChanged := req.Status != nil && prevIssue.Status != issue.Status
 	priorityChanged := req.Priority != nil && prevIssue.Priority != issue.Priority
 	descriptionChanged := req.Description != nil && textToPtr(prevIssue.Description) != resp.Description
@@ -2631,6 +2668,10 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Any transition into in_review hands ownership back to the creator,
+		// regardless of whether assignee fields were explicitly provided.
+		applyCreatorOwnershipHandoffOnInReviewTransition(&params, prevIssue)
+
 		// Validate the resulting assignee pair when this batch update touches
 		// either assignee field. Skip the issue silently on failure.
 		_, batchTouchedType := rawUpdates["assignee_type"]
@@ -2651,8 +2692,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		resp := issueToResponse(issue, prefix)
 		actorType, actorID := h.resolveActor(r, userID, workspaceID)
 
-		assigneeChanged := (req.Updates.AssigneeType != nil || req.Updates.AssigneeID != nil) &&
-			(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
+		assigneeChanged := prevIssue.AssigneeType.String != issue.AssigneeType.String ||
+			uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID)
 		statusChanged := req.Updates.Status != nil && prevIssue.Status != issue.Status
 		priorityChanged := req.Updates.Priority != nil && prevIssue.Priority != issue.Priority
 
