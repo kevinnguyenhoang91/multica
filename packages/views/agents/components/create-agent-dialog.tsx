@@ -180,12 +180,12 @@ export function CreateAgentDialog({
         if (template.custom_args.length) data.custom_args = template.custom_args;
         // Skip env when the template's values are redacted from the API
         // response — copying placeholders would create a broken clone.
-        if (
-          !template.custom_env_redacted &&
-          Object.keys(template.custom_env).length > 0
-        ) {
-          data.custom_env = template.custom_env;
-        }
+        // if (
+        //   !template.custom_env_redacted &&
+        //   Object.keys(template.custom_env).length > 0
+        // ) {
+        //   data.custom_env = template.custom_env;
+        // }
         if (
           !template.mcp_config_redacted &&
           template.mcp_config &&
