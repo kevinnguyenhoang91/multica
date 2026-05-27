@@ -136,6 +136,15 @@ WHERE i.workspace_id = $1
              AND a.owner_id     = $10::uuid
     ))
   )
+  AND ($11::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = $11::uuid
+       ))
+  AND ($12::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
 `
 
 type CountIssuesParams struct {
@@ -149,6 +158,7 @@ type CountIssuesParams struct {
 	Scheduled      pgtype.Bool   `json:"scheduled"`
 	MetadataFilter []byte        `json:"metadata_filter"`
 	InvolvesUserID pgtype.UUID   `json:"involves_user_id"`
+	ParticipatedAgentID pgtype.UUID   `json:"participated_agent_id"`
 }
 
 // See ListIssues for the semantics of involves_user_id.
@@ -161,6 +171,7 @@ func (q *Queries) CountIssues(ctx context.Context, arg CountIssuesParams) (int64
 		arg.AssigneeIds,
 		arg.CreatorID,
 		arg.ProjectID,
+		arg.ParticipatedAgentID,
 		arg.Scheduled,
 		arg.MetadataFilter,
 		arg.InvolvesUserID,
@@ -789,6 +800,15 @@ WHERE i.workspace_id = $1
              AND a.owner_id     = $12::uuid
     ))
   )
+  AND ($13::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = $13::uuid
+       ))
+  AND ($14::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
 ORDER BY i.position ASC, i.created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -806,6 +826,7 @@ type ListIssuesParams struct {
 	Scheduled      pgtype.Bool   `json:"scheduled"`
 	MetadataFilter []byte        `json:"metadata_filter"`
 	InvolvesUserID pgtype.UUID   `json:"involves_user_id"`
+	ParticipatedAgentID pgtype.UUID   `json:"participated_agent_id"`
 }
 
 type ListIssuesRow struct {
@@ -847,6 +868,7 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 		arg.AssigneeIds,
 		arg.CreatorID,
 		arg.ProjectID,
+		arg.ParticipatedAgentID,
 		arg.Scheduled,
 		arg.MetadataFilter,
 		arg.InvolvesUserID,
@@ -934,6 +956,14 @@ WHERE i.workspace_id = $1
              AND a.owner_id     = $8::uuid
     ))
   )
+  AND ($9::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = $9::uuid
+       ))
 ORDER BY i.position ASC, i.created_at DESC
 `
 
@@ -946,6 +976,7 @@ type ListOpenIssuesParams struct {
 	ProjectID      pgtype.UUID   `json:"project_id"`
 	MetadataFilter []byte        `json:"metadata_filter"`
 	InvolvesUserID pgtype.UUID   `json:"involves_user_id"`
+	ParticipatedAgentID pgtype.UUID   `json:"participated_agent_id"`
 }
 
 type ListOpenIssuesRow struct {
@@ -981,6 +1012,7 @@ func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) 
 		arg.CreatorID,
 		arg.ProjectID,
 		arg.MetadataFilter,
+		arg.ParticipatedAgentID,
 		arg.InvolvesUserID,
 	)
 	if err != nil {
@@ -1246,7 +1278,10 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 
 const advanceIssueToInReviewOnTaskCompletion = `-- name: AdvanceIssueToInReviewOnTaskCompletion :one
 UPDATE issue
-SET status = 'in_review', updated_at = now()
+SET status = 'in_review',
+    assignee_type = creator_type,
+    assignee_id = creator_id,
+    updated_at = now()
 WHERE id = $1
   AND status = 'in_progress'
   AND assignee_type IN ('agent', 'squad')
@@ -1259,7 +1294,8 @@ RETURNING id, workspace_id, title, description, status, priority, assignee_type,
 `
 
 // AdvanceIssueToInReviewOnTaskCompletion advances an issue from in_progress to
-// in_review atomically when all SQL guardrails pass:
+// in_review atomically, and hands ownership back to the issue creator, when all
+// SQL guardrails pass:
 //   - issue must be in_progress (terminal-state protection)
 //   - assignee must be agent or squad (assignee guardrail)
 //   - no queued/dispatched/running tasks remain (active-task gate)
@@ -1296,4 +1332,3 @@ func (q *Queries) AdvanceIssueToInReviewOnTaskCompletion(ctx context.Context, is
 	)
 	return i, err
 }
-

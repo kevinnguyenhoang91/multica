@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -121,16 +122,82 @@ func TestBatchUpdateValidUpdatesPersistAndCount(t *testing.T) {
 	}
 }
 
+func TestBatchUpdateInReviewTransitionReassignsToCreator(t *testing.T) {
+	ctx := context.Background()
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	a := createTestIssueWithAssignee(t, "BU-in-review A", "in_progress", "low", "agent", agentID)
+	b := createTestIssueWithAssignee(t, "BU-in-review B", "in_progress", "low", "agent", agentID)
+	t.Cleanup(func() { deleteTestIssue(t, a) })
+	t.Cleanup(func() { deleteTestIssue(t, b) })
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
+		"issue_ids": []string{a, b},
+		"updates":   map[string]any{"status": "in_review"},
+	})
+	testHandler.BatchUpdateIssues(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Updated int `json:"updated"`
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Updated != 2 {
+		t.Fatalf("expected updated=2, got %d", resp.Updated)
+	}
+
+	for _, id := range []string{a, b} {
+		gw := httptest.NewRecorder()
+		gr := newRequest("GET", "/api/issues/"+id, nil)
+		gr = withURLParam(gr, "id", id)
+		testHandler.GetIssue(gw, gr)
+		if gw.Code != http.StatusOK {
+			t.Fatalf("GetIssue(%s): expected 200, got %d: %s", id, gw.Code, gw.Body.String())
+		}
+		var got IssueResponse
+		json.NewDecoder(gw.Body).Decode(&got)
+		if got.Status != "in_review" {
+			t.Fatalf("issue %s: expected status=in_review, got %q", id, got.Status)
+		}
+		if got.AssigneeType == nil || *got.AssigneeType != "member" {
+			t.Fatalf("issue %s: expected assignee_type=member (creator), got %v", id, got.AssigneeType)
+		}
+		if got.AssigneeID == nil || *got.AssigneeID != testUserID {
+			t.Fatalf("issue %s: expected assignee_id=%s (creator), got %v", id, testUserID, got.AssigneeID)
+		}
+	}
+}
+
 // createTestIssue is a small helper to keep the table-driven cases clean.
 // Returns the new issue's id; caller is responsible for cleanup.
 func createTestIssue(t *testing.T, title, status, priority string) string {
+	return createTestIssueWithAssignee(t, title, status, priority, "", "")
+}
+
+func createTestIssueWithAssignee(t *testing.T, title, status, priority, assigneeType, assigneeID string) string {
 	t.Helper()
-	w := httptest.NewRecorder()
-	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+	body := map[string]any{
 		"title":    title,
 		"status":   status,
 		"priority": priority,
-	})
+	}
+	if assigneeType != "" {
+		body["assignee_type"] = assigneeType
+	}
+	if assigneeID != "" {
+		body["assignee_id"] = assigneeID
+	}
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, body)
 	testHandler.CreateIssue(w, req)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("CreateIssue %q: expected 201, got %d: %s", title, w.Code, w.Body.String())
