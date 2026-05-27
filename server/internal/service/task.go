@@ -157,8 +157,7 @@ func (s *TaskService) captureTaskCompleted(ctx context.Context, task db.AgentTas
 
 // maybeAdvanceIssueToInReviewOnCompletion advances an issue from in_progress
 // to in_review when a task completes. The transition is enforced atomically
-// inside a single SQL UPDATE that checks all three guardrails and hands
-// ownership back to the issue creator:
+// inside a single SQL UPDATE that checks all three guardrails:
 //   - issue must be in_progress       (terminal-state protection)
 //   - assignee must be agent or squad  (assignee guardrail)
 //   - no active tasks remain           (active-task gate)
@@ -184,9 +183,8 @@ func (s *TaskService) maybeAdvanceIssueToInReviewOnCompletion(ctx context.Contex
 		)
 		return
 	}
-	// Transition fired — publish issue:updated with status_changed and
-	// assignee_changed so downstream listeners treat this as status + ownership
-	// handoff.
+	// Transition fired — publish issue:updated with status_changed so all
+	// downstream listeners (notifications, autopilot, activity) react.
 	prefix := s.getIssuePrefix(issue.WorkspaceID)
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventIssueUpdated,
@@ -194,10 +192,9 @@ func (s *TaskService) maybeAdvanceIssueToInReviewOnCompletion(ctx context.Contex
 		ActorType:   "system",
 		ActorID:     "",
 		Payload: map[string]any{
-			"issue":            issueToMap(issue, prefix),
-			"status_changed":   true,
-			"assignee_changed": true,
-			"prev_status":      "in_progress",
+			"issue":          issueToMap(issue, prefix),
+			"status_changed": true,
+			"prev_status":    "in_progress",
 		},
 	})
 }
@@ -567,9 +564,7 @@ type QuickCreateContext struct {
 	WorkspaceID string `json:"workspace_id"`
 	ProjectID   string `json:"project_id,omitempty"`
 	SquadID     string `json:"squad_id,omitempty"`
-	// New tasks always set UseSandbox; the pointer preserves compatibility with
-	// older queued payloads that may omit the field.
-	UseSandbox *bool `json:"use_sandbox,omitempty"`
+	UseSandbox  *bool  `json:"use_sandbox,omitempty"`
 }
 
 // QuickCreateContextType marks a task as a quick-create job.
@@ -614,8 +609,6 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	if squadID.Valid {
 		payload.SquadID = util.UUIDToString(squadID)
 	}
-	// UseSandbox is always non-nil for tasks created via this enqueue path.
-	// Nil only appears on legacy tasks created before use_sandbox existed.
 	payload.UseSandbox = &useSandbox
 	contextJSON, err := json.Marshal(payload)
 	if err != nil {

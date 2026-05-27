@@ -117,7 +117,7 @@ func prepareCodexHomeWithOpts(codexHome string, opts CodexHomeOptions, logger *s
 	if opts.UseSandbox != nil && !*opts.UseSandbox {
 		policy = codexSandboxPolicy{
 			Mode:          "danger-full-access",
-			NetworkAccess: true,
+			NetworkAccess: false,
 			Reason:        "sandbox disabled by quick-create toggle",
 		}
 	}

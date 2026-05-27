@@ -387,13 +387,12 @@ describe("AgentCreatePanel", () => {
     expect(mockSetLastActor).toHaveBeenCalledWith("squad", "squad-1");
   });
 
-  it("submits use_sandbox from persisted store (sandbox toggle is hidden from UI)", async () => {
+  it("submits use_sandbox=false when the sandboxing switch is turned off", async () => {
     const user = userEvent.setup();
 
     renderPanel({ onClose: vi.fn(), isExpanded: false, setIsExpanded: vi.fn() });
 
-    expect(screen.queryByRole("checkbox", { name: "Enable sandboxing" })).not.toBeInTheDocument();
-
+    await user.click(screen.getByRole("checkbox", { name: "Enable sandboxing" }));
     await user.clear(
       screen.getByPlaceholderText(
         'Tell the agent what to do, e.g. "let Bohan fix the inbox loading slowness in the Web project"',
@@ -412,7 +411,7 @@ describe("AgentCreatePanel", () => {
         agent_id: "agent-1",
         prompt: "Investigate bug in host mode",
         project_id: undefined,
-        use_sandbox: true,
+        use_sandbox: false,
       });
     });
   });

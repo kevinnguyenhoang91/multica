@@ -161,7 +161,14 @@ WHERE i.workspace_id = $1
   AND (sqlc.narg('assignee_ids')::uuid[] IS NULL OR i.assignee_id = ANY(sqlc.narg('assignee_ids')::uuid[]))
   AND (sqlc.narg('creator_id')::uuid IS NULL OR i.creator_id = sqlc.narg('creator_id'))
   AND (sqlc.narg('project_id')::uuid IS NULL OR i.project_id = sqlc.narg('project_id'))
-  AND (sqlc.narg('metadata_filter')::jsonb IS NULL OR i.metadata @> sqlc.narg('metadata_filter')::jsonb)
+  AND (sqlc.narg('participated_agent_id')::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = sqlc.narg('participated_agent_id')::uuid
+       ))
   AND (
     sqlc.narg('involves_user_id')::uuid IS NULL
     OR (i.assignee_type = 'agent' AND i.assignee_id IN (
@@ -299,8 +306,7 @@ GROUP BY parent_issue_id;
 
 -- name: AdvanceIssueToInReviewOnTaskCompletion :one
 -- Atomically advances an issue from in_progress to in_review when a task
--- completes. The same UPDATE also hands ownership back to the issue creator.
--- All three guardrails are enforced in a single UPDATE:
+-- completes. All three guardrails are enforced in a single UPDATE:
 --   • issue must be in_progress       (terminal-state protection)
 --   • assignee must be agent or squad  (assignee guardrail)
 --   • no active tasks remain           (active-task gate: queued/dispatched/running)
@@ -308,10 +314,7 @@ GROUP BY parent_issue_id;
 -- (no rows) when any guardrail blocks the transition — callers use this to
 -- decide whether to publish the status-change event.
 UPDATE issue
-SET status = 'in_review',
-    assignee_type = creator_type,
-    assignee_id = creator_id,
-    updated_at = now()
+SET status = 'in_review', updated_at = now()
 WHERE id = $1
   AND status = 'in_progress'
   AND assignee_type IN ('agent', 'squad')

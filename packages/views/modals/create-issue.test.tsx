@@ -602,6 +602,34 @@ describe("CreateIssueModal", () => {
     );
   });
 
+  it("forwards use_sandbox from agent mode when switching back to agent", async () => {
+    const user = userEvent.setup();
+    const onSwitchMode = vi.fn();
+
+    renderModal(
+      <ManualCreatePanel
+        onClose={vi.fn()}
+        onSwitchMode={onSwitchMode}
+        data={{ use_sandbox: false }}
+        isExpanded={false}
+        setIsExpanded={vi.fn()}
+        backlogHintIssueId={null}
+        setBacklogHintIssueId={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Issue title"), "Refactor auth");
+    await user.click(screen.getByRole("button", { name: /Switch to Agent/i }));
+
+    expect(onSwitchMode).toHaveBeenCalledTimes(1);
+    expect(onSwitchMode.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        prompt: "Refactor auth",
+        use_sandbox: false,
+      }),
+    );
+  });
+
   // Start date is a low-frequency field — by default it lives behind the
   // ⋯ overflow menu and is not rendered inline. Clicking the overflow
   // entry opens it (and mounts the inline pill so the popover has an

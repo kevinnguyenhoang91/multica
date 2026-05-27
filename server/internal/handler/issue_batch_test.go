@@ -179,100 +179,69 @@ func TestBatchUpdateInReviewTransitionReassignsToCreator(t *testing.T) {
 	}
 }
 
-func TestBatchUpdateInReviewTransitionKeepsHumanAssignee(t *testing.T) {
+// TestBatchUpdateInReviewTransitionSkipsArchivedCreatorAgentAssignee is the
+// batch-path regression test for KHA-53: a status-only batch update to
+// in_review should skip (updated=0) issues whose creator is an archived agent,
+// because the handoff would derive an invalid assignee that bypasses validation.
+func TestBatchUpdateInReviewTransitionSkipsArchivedCreatorAgentAssignee(t *testing.T) {
 	ctx := context.Background()
-	var memberID string
-	if err := testPool.QueryRow(ctx, `
-			INSERT INTO "user" (name, email)
-			VALUES ($1, $2)
-			RETURNING id
-		`, "Batch Test Member", fmt.Sprintf("batch-test-member-%d@multica.ai", time.Now().UnixNano())).Scan(&memberID); err != nil {
-		t.Fatalf("failed to create workspace member user: %v", err)
-	}
-	if _, err := testPool.Exec(ctx, `
-			INSERT INTO member (workspace_id, user_id, role)
-			VALUES ($1, $2, 'member')
-		`, testWorkspaceID, memberID); err != nil {
-		t.Fatalf("failed to add workspace member: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, memberID)
-	})
 
-	issueID := createTestIssueWithAssignee(t, "BU-keep-human-assignee", "in_progress", "low", "member", memberID)
-	t.Cleanup(func() { deleteTestIssue(t, issueID) })
+	// Create a fresh agent to act as creator (will be archived before the update).
+	creatorAgent := createHandlerTestAgent(t, "KHA53 Batch Creator Agent", []byte("[]"))
 
+	a := createTestIssue(t, "BU-kha53-archived-creator A", "in_progress", "low")
+	b := createTestIssue(t, "BU-kha53-archived-creator B", "in_progress", "low")
+	t.Cleanup(func() { deleteTestIssue(t, a) })
+	t.Cleanup(func() { deleteTestIssue(t, b) })
+
+	// Override creator for both issues to the fresh agent.
+	for _, id := range []string{a, b} {
+		if _, err := testPool.Exec(ctx,
+			`UPDATE issue SET creator_type = 'agent', creator_id = $1 WHERE id = $2`,
+			creatorAgent, id,
+		); err != nil {
+			t.Fatalf("override creator for issue %s: %v", id, err)
+		}
+	}
+
+	// Archive the creator agent.
+	if _, err := testPool.Exec(ctx,
+		`UPDATE agent SET archived_at = now(), archived_by = $1 WHERE id = $2`,
+		testUserID, creatorAgent,
+	); err != nil {
+		t.Fatalf("archive creator agent: %v", err)
+	}
+
+	// Status-only batch in_review update — both issues should be skipped
+	// because the handoff would derive the archived agent as their assignee.
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
-		"issue_ids": []string{issueID},
+		"issue_ids": []string{a, b},
 		"updates":   map[string]any{"status": "in_review"},
 	})
 	testHandler.BatchUpdateIssues(w, req)
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("BatchUpdateIssues: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Updated int `json:"updated"`
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Updated != 0 {
+		t.Fatalf("expected updated=0 (all skipped), got %d", resp.Updated)
 	}
 
-	gw := httptest.NewRecorder()
-	gr := newRequest("GET", "/api/issues/"+issueID, nil)
-	gr = withURLParam(gr, "id", issueID)
-	testHandler.GetIssue(gw, gr)
-	if gw.Code != http.StatusOK {
-		t.Fatalf("GetIssue(%s): expected 200, got %d: %s", issueID, gw.Code, gw.Body.String())
-	}
-	var got IssueResponse
-	json.NewDecoder(gw.Body).Decode(&got)
-	if got.Status != "in_review" {
-		t.Fatalf("issue %s: expected status=in_review, got %q", issueID, got.Status)
-	}
-	if got.AssigneeType == nil || *got.AssigneeType != "member" {
-		t.Fatalf("issue %s: expected assignee_type=member, got %v", issueID, got.AssigneeType)
-	}
-	if got.AssigneeID == nil || *got.AssigneeID != memberID {
-		t.Fatalf("issue %s: expected assignee_id=%s (unchanged), got %v", issueID, memberID, got.AssigneeID)
-	}
-}
-
-func TestBatchUpdateToInReviewFromTodoKeepsAgentAssignee(t *testing.T) {
-	ctx := context.Background()
-	var agentID string
-	err := testPool.QueryRow(ctx,
-		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
-		testWorkspaceID, "Handler Test Agent",
-	).Scan(&agentID)
-	if err != nil {
-		t.Fatalf("failed to find test agent: %v", err)
-	}
-
-	issueID := createTestIssueWithAssignee(t, "BU-no-handoff-from-todo", "todo", "low", "agent", agentID)
-	t.Cleanup(func() { deleteTestIssue(t, issueID) })
-
-	w := httptest.NewRecorder()
-	req := newRequest("POST", "/api/issues/batch-update", map[string]any{
-		"issue_ids": []string{issueID},
-		"updates":   map[string]any{"status": "in_review"},
-	})
-	testHandler.BatchUpdateIssues(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	gw := httptest.NewRecorder()
-	gr := newRequest("GET", "/api/issues/"+issueID, nil)
-	gr = withURLParam(gr, "id", issueID)
-	testHandler.GetIssue(gw, gr)
-	if gw.Code != http.StatusOK {
-		t.Fatalf("GetIssue(%s): expected 200, got %d: %s", issueID, gw.Code, gw.Body.String())
-	}
-	var got IssueResponse
-	json.NewDecoder(gw.Body).Decode(&got)
-	if got.Status != "in_review" {
-		t.Fatalf("issue %s: expected status=in_review, got %q", issueID, got.Status)
-	}
-	if got.AssigneeType == nil || *got.AssigneeType != "agent" {
-		t.Fatalf("issue %s: expected assignee_type=agent, got %v", issueID, got.AssigneeType)
-	}
-	if got.AssigneeID == nil || *got.AssigneeID != agentID {
-		t.Fatalf("issue %s: expected assignee_id=%s (unchanged), got %v", issueID, agentID, got.AssigneeID)
+	// Confirm statuses were not changed.
+	for _, id := range []string{a, b} {
+		gw := httptest.NewRecorder()
+		gr := newRequest("GET", "/api/issues/"+id, nil)
+		gr = withURLParam(gr, "id", id)
+		testHandler.GetIssue(gw, gr)
+		var got IssueResponse
+		json.NewDecoder(gw.Body).Decode(&got)
+		if got.Status != "in_progress" {
+			t.Fatalf("issue %s: expected status=in_progress (unchanged), got %q", id, got.Status)
+		}
 	}
 }
 

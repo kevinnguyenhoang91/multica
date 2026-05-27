@@ -290,6 +290,7 @@ export function AgentCreatePanel({
       });
       setLastActor(actor.type, actor.id);
       setLastProjectId(projectId);
+      setPersistedUseSandbox(useSandbox);
       clearPrompt();
       setLastMode("agent");
       toast.success(t(($) => $.create_issue.agent.toast_sent), {
@@ -519,6 +520,18 @@ export function AgentCreatePanel({
                 aria-label={t(($) => $.create_issue.create_another)}
               />
               {t(($) => $.create_issue.create_another)}
+            </label>
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <Switch
+                size="sm"
+                checked={useSandbox}
+                onCheckedChange={(v) => {
+                  setUseSandbox(v);
+                  setPersistedUseSandbox(v);
+                }}
+                aria-label={t(($) => $.create_issue.sandbox_toggle)}
+              />
+              {t(($) => $.create_issue.sandbox_toggle)}
             </label>
             <Button
               size="sm"

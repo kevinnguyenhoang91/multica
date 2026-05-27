@@ -879,21 +879,19 @@ func TestCopilotExecutePassesAndCleansAdditionalMCPConfig(t *testing.T) {
 		"script_dir=$(dirname \"$0\")\n" +
 		"capture_path=\"$script_dir/captured-mcp.json\"\n" +
 		"used_path_file=\"$script_dir/used-mcp-path.txt\"\n" +
-		"mcp_arg=\"\"\n" +
+		"mcp=\"\"\n" +
 		"while [ $# -gt 0 ]; do\n" +
 		"  if [ \"$1\" = \"--additional-mcp-config\" ]; then\n" +
 		"    shift\n" +
-		"    mcp_arg=\"$1\"\n" +
+		"    mcp=\"$1\"\n" +
 		"    break\n" +
 		"  fi\n" +
 		"  shift\n" +
 		"done\n" +
-		"if [ -z \"$mcp_arg\" ]; then\n" +
+		"if [ -z \"$mcp\" ]; then\n" +
 		"  echo \"missing --additional-mcp-config\" >&2\n" +
 		"  exit 2\n" +
 		"fi\n" +
-		// Strip leading '@' — Copilot uses '@<path>' to read from a file.
-		"mcp=\"${mcp_arg#@}\"\n" +
 		"if [ ! -f \"$mcp\" ]; then\n" +
 		"  echo \"mcp file not found: $mcp\" >&2\n" +
 		"  exit 3\n" +

@@ -702,7 +702,6 @@ interface IssueDetailProps {
 
 export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId }: IssueDetailProps) {
   const { t } = useT("issues");
-  const timeAgo = useTimeAgo();
   const downloadAttachment = useDownloadAttachment();
   const id = issueId;
   const router = useNavigation();
