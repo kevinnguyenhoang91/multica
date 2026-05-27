@@ -1,167 +1,200 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Eraser, Loader2, Lock, Save } from "lucide-react";
-import type { Agent } from "@multica/core/types";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Braces,
+  Loader2,
+  Lock,
+  Save,
+  Trash2,
+} from "lucide-react";
+import type { Agent, RuntimeDevice } from "@multica/core/types";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@multica/ui/components/ui/alert";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { toast } from "sonner";
 import { useT } from "../../../i18n";
 
-// `null` and the empty string are the two ways the user can mean "no
-// config" — the server stores either as a NULL column and the daemon
-// falls back to the runtime CLI default at launch. We normalise to
-// the empty string in the editor so the dirty check has one canonical
-// form to compare against.
-function configToText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  return JSON.stringify(value, null, 2);
+type ParsedMcpConfig =
+  | { ok: true; value: Record<string, unknown> | null }
+  | { ok: false };
+
+function formatMcpConfig(value: Record<string, unknown> | null | undefined) {
+  return value ? JSON.stringify(value, null, 2) : "";
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)]),
+    );
+  }
+
+  return value;
+}
+
+function stringifyForComparison(value: Record<string, unknown> | null) {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function parseMcpConfigInput(input: string): ParsedMcpConfig {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { ok: true, value: null };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false };
+    }
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function isClaudeRuntime(runtimeDevice?: RuntimeDevice) {
+  const provider = runtimeDevice?.provider.toLowerCase();
+  return provider === "claude" || provider === "claude-code";
 }
 
 export function McpConfigTab({
   agent,
+  runtimeDevice,
+  readOnly = false,
   onSave,
   onDirtyChange,
 }: {
   agent: Agent;
-  onSave: (updates: { mcp_config: unknown | null }) => Promise<void>;
+  runtimeDevice?: RuntimeDevice;
+  readOnly?: boolean;
+  onSave: (updates: Partial<Agent>) => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { t } = useT("agents");
-
-  const redacted = agent.mcp_config_redacted === true;
-  const original = useMemo(() => configToText(agent.mcp_config), [agent.mcp_config]);
-  const [text, setText] = useState(original);
+  const [value, setValue] = useState(formatMcpConfig(agent.mcp_config));
   const [saving, setSaving] = useState(false);
+  const runtimeSupportsMcp = isClaudeRuntime(runtimeDevice);
 
-  // Sync local draft when the agent prop changes (e.g. after a successful
-  // save invalidates the cache and a fresh agent arrives). We only sync
-  // when the user has no in-flight edits — comparing the current draft
-  // against the *previous* original (not the new one) is what tells us
-  // "they haven't touched this since the last sync". Comparing against
-  // the new original would skip the sync whenever the server-side value
-  // changes underneath an untouched draft, leaving the editor showing a
-  // stale value that a later Save would write back, clobbering another
-  // admin's edit.
-  const previousOriginalRef = useRef(original);
   useEffect(() => {
-    setText((current) =>
-      current === previousOriginalRef.current ? original : current,
-    );
-    previousOriginalRef.current = original;
-  }, [original]);
+    setValue(formatMcpConfig(agent.mcp_config));
+  }, [agent.id, agent.mcp_config]);
 
-  const trimmed = text.trim();
-  const parseResult = useMemo<
-    | { ok: true; value: unknown | null }
-    | { ok: false; error: string }
-  >(() => {
-    if (trimmed === "") return { ok: true, value: null };
-    try {
-      const value = JSON.parse(trimmed);
-      // The MCP CLI accepts an object (`{"mcpServers": …}`); a top-level
-      // array or primitive is almost certainly a user mistake, so reject
-      // here rather than surprise them with a server-side error later.
-      if (value === null || typeof value !== "object" || Array.isArray(value)) {
-        return {
-          ok: false,
-          error: "mcp_config_not_object",
-        };
-      }
-      return { ok: true, value };
-    } catch (err) {
-      return {
-        ok: false,
-        error: err instanceof Error ? err.message : "invalid JSON",
-      };
-    }
-  }, [trimmed]);
-
-  const dirty = text !== original;
+  const parsedInput = useMemo(() => parseMcpConfigInput(value), [value]);
+  const originalConfig = agent.mcp_config ?? null;
+  const dirty =
+    parsedInput.ok
+      ? stringifyForComparison(parsedInput.value) !==
+        stringifyForComparison(originalConfig)
+      : value !== formatMcpConfig(originalConfig);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
-  if (redacted) {
-    return (
-      <div className="space-y-3">
-        <p className="flex items-center gap-2 text-sm font-medium">
-          <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-          {t(($) => $.tab_body.mcp_config.redacted_title)}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {t(($) => $.tab_body.mcp_config.redacted_hint)}
-        </p>
-      </div>
-    );
-  }
+  const handleClear = () => {
+    setValue("");
+  };
 
   const handleSave = async () => {
-    if (!parseResult.ok) return;
+    const parsed = parseMcpConfigInput(value);
+    if (!parsed.ok) {
+      toast.error(t(($) => $.tab_body.mcp.invalid_json_toast));
+      return;
+    }
+
     setSaving(true);
     try {
-      await onSave({ mcp_config: parseResult.value });
-      // Normalise the editor to the pretty-printed canonical form so the
-      // dirty check stops firing after a successful save (the user's
-      // raw input may differ from what configToText would emit).
-      setText(configToText(parseResult.value));
-      toast.success(t(($) => $.tab_body.mcp_config.saved_toast));
-    } catch (err) {
-      toast.error(
-        err instanceof Error && err.message
-          ? err.message
-          : t(($) => $.tab_body.mcp_config.save_failed_toast),
-      );
+      await onSave({ mcp_config: parsed.value });
+      toast.success(t(($) => $.tab_body.mcp.saved_toast));
+    } catch {
+      toast.error(t(($) => $.tab_body.mcp.save_failed_toast));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleClear = () => {
-    setText("");
-  };
-
-  const showInvalid = trimmed !== "" && !parseResult.ok;
-  const invalidMessage = !parseResult.ok && parseResult.error === "mcp_config_not_object"
-    ? t(($) => $.tab_body.mcp_config.invalid_not_object)
-    : !parseResult.ok
-      ? t(($) => $.tab_body.mcp_config.invalid_json, { error: parseResult.error })
-      : "";
+  if (readOnly) {
+    return (
+      <div className="space-y-4">
+        <Alert>
+          <Lock className="h-4 w-4" />
+          <AlertTitle>{t(($) => $.tab_body.mcp.redacted_title)}</AlertTitle>
+          <AlertDescription>
+            {t(($) => $.tab_body.mcp.redacted_description)}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-full flex-col space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {t(($) => $.tab_body.mcp_config.intro)}
-        </p>
-        {trimmed !== "" && (
+    <div className="flex h-full flex-col gap-4">
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              {t(($) => $.tab_body.mcp.intro)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t(($) => $.tab_body.mcp.empty_hint)}
+            </p>
+          </div>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={handleClear}
+            disabled={!value.trim()}
             className="shrink-0"
           >
-            <Eraser className="h-3 w-3" />
-            {t(($) => $.tab_body.mcp_config.clear_action)}
+            <Trash2 className="h-3.5 w-3.5" />
+            {t(($) => $.tab_body.mcp.clear)}
           </Button>
+        </div>
+
+        {!runtimeSupportsMcp && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertTitle>{t(($) => $.tab_body.mcp.unsupported_title)}</AlertTitle>
+            <AlertDescription>
+              {runtimeDevice
+                ? t(($) => $.tab_body.mcp.unsupported_description, {
+                    provider: runtimeDevice.provider,
+                  })
+                : t(($) => $.tab_body.mcp.no_runtime_description)}
+            </AlertDescription>
+          </Alert>
         )}
       </div>
 
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={t(($) => $.tab_body.mcp_config.placeholder)}
-        aria-invalid={showInvalid || undefined}
-        aria-label={t(($) => $.tab_body.mcp_config.editor_aria)}
-        spellCheck={false}
-        className="min-h-[240px] flex-1 font-mono text-xs"
-      />
-
-      {showInvalid && (
-        <p className="text-xs text-destructive">{invalidMessage}</p>
-      )}
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Braces className="h-3.5 w-3.5" />
+          {t(($) => $.tab_body.mcp.editor_label)}
+        </div>
+        <Textarea
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder={t(($) => $.tab_body.mcp.placeholder)}
+          aria-label={t(($) => $.tab_body.mcp.editor_aria)}
+          aria-invalid={parsedInput.ok ? undefined : true}
+          spellCheck={false}
+          className="min-h-[320px] flex-1 resize-y field-sizing-fixed font-mono text-xs leading-5"
+        />
+      </div>
 
       <div className="flex items-center justify-end gap-3">
         {dirty && (
@@ -169,11 +202,7 @@ export function McpConfigTab({
             {t(($) => $.tab_body.common.unsaved_changes)}
           </span>
         )}
-        <Button
-          onClick={handleSave}
-          disabled={!dirty || !parseResult.ok || saving}
-          size="sm"
-        >
+        <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
           {saving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (

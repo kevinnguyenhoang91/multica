@@ -151,46 +151,9 @@ export interface Agent {
   runtime_mode: AgentRuntimeMode;
   runtime_config: Record<string, unknown>;
   custom_args: string[];
-  /**
-   * Coarse metadata signalling whether the agent has any custom env
-   * vars configured, without exposing the keys or values. Reads of
-   * the real map go through the dedicated `GET /api/agents/{id}/env`
-   * endpoint (owner/admin only, audited). MUL-2600.
-   *
-   * Optional in the type so older backends (pre-MUL-2600) that omit
-   * the field don't crash the renderer; downstream code should treat
-   * `undefined` as "unknown — assume no env" rather than "definitely
-   * has env".
-   */
-  has_custom_env?: boolean;
-  /**
-   * Number of keys in the agent's custom_env map. Always present
-   * alongside `has_custom_env`. Treat `undefined` as zero. MUL-2600.
-   */
-  custom_env_key_count?: number;
-  /**
-   * MCP server configuration forwarded to runtimes that consume
-   * `agent.mcp_config` (see providerSupportsMcpConfig). Each backend
-   * materialises it in the runtime-native place: Claude flags, Codex
-   * config.toml, ACP session params, OpenCode env config, OpenClaw
-   * wrapper config, etc. `null` (or the field omitted on legacy backends)
-   * means no managed config; the daemon falls back to the CLI's own
-   * default. MUL-2764.
-   *
-   * When the caller can't see secrets (an agent actor, or a non-owner
-   * non-admin), the server replaces the value with `null` and sets
-   * `mcp_config_redacted` to true so the UI can render a "configured
-   * but hidden" state without exposing potentially sensitive fields.
-   */
-  mcp_config?: unknown | null;
-  /**
-   * True when the server stripped `mcp_config` from this response
-   * because the caller lacks permission to see secrets. The UI uses
-   * this to distinguish "no config" (`mcp_config === null &&
-   * !mcp_config_redacted`) from "config exists but you can't see it".
-   * Older backends omit this field; treat `undefined` as false.
-   */
-  mcp_config_redacted?: boolean;
+  custom_env_redacted: boolean;
+  mcp_config: Record<string, unknown> | null;
+  mcp_config_redacted: boolean;
   visibility: AgentVisibility;
   status: AgentStatus;
   max_concurrent_tasks: number;
@@ -236,6 +199,7 @@ export interface CreateAgentRequest {
   runtime_config?: Record<string, unknown>;
   custom_env?: Record<string, string>;
   custom_args?: string[];
+  mcp_config?: Record<string, unknown> | null;
   visibility?: AgentVisibility;
   max_concurrent_tasks?: number;
   model?: string;
@@ -333,15 +297,7 @@ export interface UpdateAgentRequest {
    * MUL-2600.
    */
   custom_args?: string[];
-  /**
-   * MCP server configuration. Tri-state semantics (MUL-2764):
-   *   - field omitted → no change
-   *   - `null` → clear the column; the daemon falls back to the CLI's
-   *     built-in default at launch
-   *   - object → replace the stored JSON verbatim; runtime backends
-   *     validate / translate it according to their own MCP integration
-   */
-  mcp_config?: unknown | null;
+  mcp_config?: Record<string, unknown> | null;
   visibility?: AgentVisibility;
   status?: AgentStatus;
   max_concurrent_tasks?: number;

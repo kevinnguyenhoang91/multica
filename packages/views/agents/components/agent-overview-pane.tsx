@@ -6,8 +6,7 @@ import {
   BookOpenText,
   FileText,
   KeyRound,
-  ListTodo,
-  Plug,
+  PlugZap,
   Terminal,
   Webhook,
 } from "lucide-react";
@@ -32,8 +31,6 @@ import { SkillsTab } from "./tabs/skills-tab";
 import { EnvTab } from "./tabs/env-tab";
 import { CustomArgsTab } from "./tabs/custom-args-tab";
 import { McpConfigTab } from "./tabs/mcp-config-tab";
-import { IntegrationsTab } from "./tabs/integrations-tab";
-import { ActorIssuesPanel } from "../../common/actor-issues-panel";
 import { useT } from "../../i18n";
 
 export type DetailTab =
@@ -42,16 +39,16 @@ export type DetailTab =
   | "instructions"
   | "skills"
   | "env"
-  | "custom_args"
-  | "mcp_config"
-  | "integrations";
+  | "mcp"
+  | "custom_args";
 
-const TAB_LABEL_KEY: Record<DetailTab, "activity" | "tasks" | "instructions" | "skills" | "environment" | "custom_args" | "mcp_config" | "integrations"> = {
+const TAB_LABEL_KEY: Record<DetailTab, "activity" | "instructions" | "skills" | "environment" | "mcp" | "custom_args"> = {
   activity: "activity",
   tasks: "tasks",
   instructions: "instructions",
   skills: "skills",
   env: "environment",
+  mcp: "mcp",
   custom_args: "custom_args",
   mcp_config: "mcp_config",
   integrations: "integrations",
@@ -66,6 +63,7 @@ const detailTabs: {
   { id: "instructions", icon: FileText },
   { id: "skills", icon: BookOpenText },
   { id: "env", icon: KeyRound },
+  { id: "mcp", icon: PlugZap },
   { id: "custom_args", icon: Terminal },
   { id: "mcp_config", icon: Plug },
   { id: "integrations", icon: Webhook },
@@ -86,12 +84,11 @@ interface AgentOverviewPaneProps {
 }
 
 /**
- * Right-pane on the agent detail page:
+ * Right-pane on the agent detail page. Six tabs of equal weight:
  *
  *   - Activity (default) — what the agent is doing now / how it's been doing /
  *     what it just finished. The "watch state" surface.
- *   - Tasks — assigned/created issues using the shared issue board/list.
- *   - Instructions / Skills / Env / Custom Args — four editing surfaces.
+ *   - Instructions / Skills / Env / MCP / Custom Args — five editing surfaces.
  *
  * The previous Settings tab was deleted because every field on it is now
  * inline-editable in the inspector (left column) — runtime / model /
@@ -247,7 +244,18 @@ export function AgentOverviewPane({
             />
           </TabContent>
         )}
-        {effectiveTab === "custom_args" && (
+        {activeTab === "mcp" && (
+          <TabContent>
+            <McpConfigTab
+              agent={agent}
+              runtimeDevice={runtime ?? undefined}
+              readOnly={!!agent.mcp_config_redacted}
+              onSave={(updates) => onUpdate(agent.id, updates)}
+              onDirtyChange={setActiveDirty}
+            />
+          </TabContent>
+        )}
+        {activeTab === "custom_args" && (
           <TabContent>
             <CustomArgsTab
               agent={agent}

@@ -207,6 +207,7 @@
     "instructions": "Instructions",
     "skills": "Skills",
     "environment": "Environment",
+    "mcp": "MCP",
     "custom_args": "Custom Args",
     "mcp_config": "MCP",
     "integrations": "Integrations",
@@ -219,7 +220,7 @@
     "title_create": "Create Agent",
     "title_duplicate": "Duplicate Agent",
     "description_create": "Create a new AI agent for your workspace.",
-    "description_duplicate": "Create a new agent based on \"{{name}}\". Instructions, env, and skills are copied for you.",
+    "description_duplicate": "Create a new agent based on \"{{name}}\". Instructions, env, MCP config, and skills are copied for you.",
     "name_label": "Name",
     "name_placeholder": "e.g. Deep Research Agent",
     "description_label": "Description",
@@ -309,17 +310,21 @@
       "saved_toast": "Custom arguments saved",
       "save_failed_toast": "Failed to save custom arguments"
     },
-    "mcp_config": {
-      "intro": "MCP server configuration forwarded to the runtime CLI (Claude via --mcp-config, Codex via $CODEX_HOME/config.toml, Hermes/Kimi/Kiro via ACP mcpServers, OpenCode via OPENCODE_CONFIG_CONTENT, OpenClaw via the per-task config wrapper). Stored verbatim and may contain secrets — only the agent owner and workspace admins can read it. Leave empty to fall back to the CLI's own default. For OpenClaw HTTP/SSE entries use OpenClaw's own field name (e.g. \"transport\": \"streamable-http\") instead of Claude's \"type\".",
-      "placeholder": "{\n  \"mcpServers\": {\n    \"fetch\": {\n      \"command\": \"uvx\",\n      \"args\": [\"mcp-server-fetch\"]\n    }\n  }\n}",
-      "editor_aria": "MCP config JSON editor",
-      "clear_action": "Clear",
-      "invalid_json": "Invalid JSON: {{error}}",
-      "invalid_not_object": "MCP config must be a JSON object (e.g. {\"mcpServers\": …}).",
+    "mcp": {
+      "intro": "Per-agent MCP configuration passed to Claude Code when a task starts.",
+      "empty_hint": "Leave the editor empty to clear this agent's MCP config.",
+      "clear": "Clear",
+      "unsupported_title": "This runtime ignores MCP config",
+      "unsupported_description": "{{provider}} accepts the saved field but does not read it. Only Claude Code currently consumes MCP config.",
+      "no_runtime_description": "Select a Claude Code runtime before relying on MCP servers for this agent.",
+      "editor_label": "MCP config JSON",
+      "editor_aria": "MCP config JSON",
+      "placeholder": "{\n  \"mcpServers\": {\n    \"github\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"]\n    }\n  }\n}",
+      "redacted_title": "MCP config is hidden",
+      "redacted_description": "This agent has MCP config, but only the agent owner or workspace admin can view and edit it.",
+      "invalid_json_toast": "MCP config must be a JSON object",
       "saved_toast": "MCP config saved",
-      "save_failed_toast": "Failed to save MCP config",
-      "redacted_title": "Configured — hidden from your view",
-      "redacted_hint": "Only the agent owner or a workspace admin can read this config."
+      "save_failed_toast": "Failed to save MCP config"
     },
     "skills": {
       "intro": "Workspace skills assigned to this agent. Local runtime skills are always available automatically.",
