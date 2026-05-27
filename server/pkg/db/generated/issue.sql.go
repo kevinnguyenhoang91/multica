@@ -848,6 +848,7 @@ type ListIssuesRow struct {
 	Number        int32              `json:"number"`
 	ProjectID     pgtype.UUID        `json:"project_id"`
 	Metadata      []byte             `json:"metadata"`
+	ParticipatedAgentID      pgtype.UUID        `json:"participated_agent_id"`
 }
 
 // involves_user_id widens the assignee filter to surface issues where the user
