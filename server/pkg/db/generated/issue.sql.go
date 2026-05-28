@@ -102,14 +102,22 @@ WHERE i.workspace_id = $1
   AND ($5::uuid[] IS NULL OR i.assignee_id = ANY($5::uuid[]))
   AND ($6::uuid IS NULL OR i.creator_id = $6)
   AND ($7::uuid IS NULL OR i.project_id = $7)
-  AND ($8::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
-  AND ($9::jsonb IS NULL OR i.metadata @> $9::jsonb)
+  AND ($8::uuid IS NULL
+       OR EXISTS (
+           SELECT 1
+           FROM comment c
+           WHERE c.issue_id = i.id
+             AND c.author_type = 'agent'
+             AND c.author_id = $8::uuid
+       ))
+  AND ($9::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
+  AND ($10::jsonb IS NULL OR i.metadata @> $10::jsonb)
   AND (
-    $10::uuid IS NULL
+    $11::uuid IS NULL
     OR (i.assignee_type = 'agent' AND i.assignee_id IN (
           SELECT a.id FROM agent a
            WHERE a.workspace_id = $1
-             AND a.owner_id     = $10::uuid
+             AND a.owner_id     = $11::uuid
     ))
     OR (i.assignee_type = 'squad' AND i.assignee_id IN (
           SELECT sm.squad_id
@@ -117,14 +125,14 @@ WHERE i.workspace_id = $1
             JOIN squad s ON s.id = sm.squad_id
            WHERE s.workspace_id = $1
              AND sm.member_type = 'member'
-             AND sm.member_id   = $10::uuid
+             AND sm.member_id   = $11::uuid
           UNION
           SELECT s.id
             FROM squad s
             JOIN agent a ON a.id = s.leader_id
            WHERE s.workspace_id = $1
              AND a.workspace_id = $1
-             AND a.owner_id     = $10::uuid
+             AND a.owner_id     = $11::uuid
           UNION
           SELECT sm.squad_id
             FROM squad_member sm
@@ -133,18 +141,9 @@ WHERE i.workspace_id = $1
            WHERE s.workspace_id = $1
              AND sm.member_type = 'agent'
              AND a.workspace_id = $1
-             AND a.owner_id     = $10::uuid
+             AND a.owner_id     = $11::uuid
     ))
   )
-  AND ($11::uuid IS NULL
-       OR EXISTS (
-           SELECT 1
-           FROM comment c
-           WHERE c.issue_id = i.id
-             AND c.author_type = 'agent'
-             AND c.author_id = $11::uuid
-       ))
-  AND ($12::bool IS NULL OR (i.start_date IS NOT NULL OR i.due_date IS NOT NULL))
 `
 
 type CountIssuesParams struct {
@@ -1030,8 +1029,8 @@ func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) 
 		arg.CreatorID,
 		arg.ProjectID,
 		arg.MetadataFilter,
-		arg.ParticipatedAgentID,
 		arg.InvolvesUserID,
+		arg.ParticipatedAgentID,
 	)
 	if err != nil {
 		return nil, err
