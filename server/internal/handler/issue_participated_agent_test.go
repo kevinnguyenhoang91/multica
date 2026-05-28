@@ -106,6 +106,83 @@ func TestListGroupedIssues_ParticipatedAgentID_MatchesAgentComments(t *testing.T
 	}
 }
 
+func TestListIssues_ParticipatedAgentID_EchoedInTopLevelAndIssues(t *testing.T) {
+	ctx := context.Background()
+	fx := setupInvolvesFixture(t)
+
+	issueID := insertIssueTo(t, ctx, testWorkspaceID,
+		"participated-agent echo list response", "member", fx.userID)
+	insertAgentComment(t, issueID, fx.ownedAgentID, "echo me in list response")
+
+	path := fmt.Sprintf("/api/issues?workspace_id=%s&participated_agent_id=%s&limit=100",
+		testWorkspaceID, fx.ownedAgentID)
+	w := httptest.NewRecorder()
+	testHandler.ListIssues(w, newRequest("GET", path, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListIssues: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ParticipatedAgentID *string         `json:"participated_agent_id"`
+		Issues              []IssueResponse `json:"issues"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if resp.ParticipatedAgentID == nil || *resp.ParticipatedAgentID != fx.ownedAgentID {
+		t.Fatalf("expected top-level participated_agent_id %s, got %+v", fx.ownedAgentID, resp.ParticipatedAgentID)
+	}
+	if len(resp.Issues) == 0 {
+		t.Fatalf("expected at least one issue in response")
+	}
+	for _, issue := range resp.Issues {
+		if issue.ParticipatedAgentID == nil || *issue.ParticipatedAgentID != fx.ownedAgentID {
+			t.Fatalf("expected issue %s to echo participated_agent_id %s, got %+v",
+				issue.ID, fx.ownedAgentID, issue.ParticipatedAgentID)
+		}
+	}
+}
+
+func TestListGroupedIssues_ParticipatedAgentID_EchoedInTopLevelAndIssues(t *testing.T) {
+	ctx := context.Background()
+	fx := setupInvolvesFixture(t)
+
+	issueID := insertIssueTo(t, ctx, testWorkspaceID,
+		"participated-agent echo grouped response", "member", fx.userID)
+	insertAgentComment(t, issueID, fx.ownedAgentID, "echo me in grouped response")
+
+	path := fmt.Sprintf(
+		"/api/issues/grouped?workspace_id=%s&group_by=assignee&statuses=todo&participated_agent_id=%s&limit=100",
+		testWorkspaceID, fx.ownedAgentID,
+	)
+	w := httptest.NewRecorder()
+	testHandler.ListGroupedIssues(w, newRequest("GET", path, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListGroupedIssues: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp GroupedIssuesResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode grouped response: %v", err)
+	}
+	if resp.ParticipatedAgentID == nil || *resp.ParticipatedAgentID != fx.ownedAgentID {
+		t.Fatalf("expected top-level participated_agent_id %s, got %+v", fx.ownedAgentID, resp.ParticipatedAgentID)
+	}
+	issueCount := 0
+	for _, group := range resp.Groups {
+		for _, issue := range group.Issues {
+			issueCount++
+			if issue.ParticipatedAgentID == nil || *issue.ParticipatedAgentID != fx.ownedAgentID {
+				t.Fatalf("expected issue %s to echo participated_agent_id %s, got %+v",
+					issue.ID, fx.ownedAgentID, issue.ParticipatedAgentID)
+			}
+		}
+	}
+	if issueCount == 0 {
+		t.Fatalf("expected at least one grouped issue in response")
+	}
+}
+
 func TestListIssues_ParticipatedAgentID_InvalidUUIDReturns400(t *testing.T) {
 	path := fmt.Sprintf("/api/issues?workspace_id=%s&participated_agent_id=not-a-uuid", testWorkspaceID)
 	w := httptest.NewRecorder()
