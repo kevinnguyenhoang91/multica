@@ -60,7 +60,8 @@ type IssueResponse struct {
 	// WS broadcast) emit no `labels` field at all — the client merge then
 	// preserves whatever labels are already in cache. nil pointer = "field
 	// absent, do not touch"; non-nil (incl. empty slice) = authoritative list.
-	Labels *[]LabelResponse `json:"labels,omitempty"`
+	Labels              *[]LabelResponse `json:"labels,omitempty"`
+	ParticipatedAgentID *string          `json:"participated_agent_id,omitempty"`
 }
 
 // validIssueStatuses / validIssuePriorities mirror the CHECK constraints on
@@ -199,7 +200,8 @@ type IssueAssigneeGroupResponse struct {
 }
 
 type GroupedIssuesResponse struct {
-	Groups []IssueAssigneeGroupResponse `json:"groups"`
+	Groups              []IssueAssigneeGroupResponse `json:"groups"`
+	ParticipatedAgentID *string                      `json:"participated_agent_id,omitempty"`
 }
 
 type groupedIssueRow struct {
@@ -212,6 +214,14 @@ func assigneeGroupID(assigneeType pgtype.Text, assigneeID pgtype.UUID) string {
 		return "assignee:" + assigneeType.String + ":" + uuidToString(assigneeID)
 	}
 	return "assignee:unassigned"
+}
+
+func echoedParticipatedAgentID(id pgtype.UUID) *string {
+	if !id.Valid {
+		return nil
+	}
+	s := uuidToString(id)
+	return &s
 }
 
 // SearchIssueResponse extends IssueResponse with search metadata.
@@ -801,14 +811,14 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	// open_only=true returns all non-done/cancelled issues (no limit).
 	if r.URL.Query().Get("open_only") == "true" {
 		issues, err := h.Queries.ListOpenIssues(ctx, db.ListOpenIssuesParams{
-			WorkspaceID:    wsUUID,
-			Priority:       priorityFilter,
-			AssigneeID:     assigneeFilter,
-			AssigneeIds:    assigneeIdsFilter,
-			CreatorID:      creatorFilter,
-			ProjectID:      projectFilter,
-			InvolvesUserID: involvesUserFilter,
-			MetadataFilter: metadataFilter,
+			WorkspaceID:         wsUUID,
+			Priority:            priorityFilter,
+			AssigneeID:          assigneeFilter,
+			AssigneeIds:         assigneeIdsFilter,
+			CreatorID:           creatorFilter,
+			ProjectID:           projectFilter,
+			InvolvesUserID:      involvesUserFilter,
+			MetadataFilter:      metadataFilter,
 			ParticipatedAgentID: participatedAgentFilter,
 		})
 		if err != nil {
@@ -823,6 +833,7 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		labelsMap := h.labelsByIssue(ctx, wsUUID, ids)
 		resp := make([]IssueResponse, len(issues))
+		participatedAgentEcho := echoedParticipatedAgentID(participatedAgentFilter)
 		for i, issue := range issues {
 			resp[i] = openIssueRowToResponse(issue, prefix)
 			labels := labelsMap[resp[i].ID]
@@ -830,12 +841,17 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 				labels = []LabelResponse{}
 			}
 			resp[i].Labels = &labels
+			resp[i].ParticipatedAgentID = participatedAgentEcho
 		}
 
-		writeJSON(w, http.StatusOK, map[string]any{
+		payload := map[string]any{
 			"issues": resp,
 			"total":  len(resp),
-		})
+		}
+		if participatedAgentEcho != nil {
+			payload["participated_agent_id"] = *participatedAgentEcho
+		}
+		writeJSON(w, http.StatusOK, payload)
 		return
 	}
 
@@ -1022,7 +1038,6 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 			&row.Number,
 			&row.ProjectID,
 			&row.Metadata,
-			&row.ParticipatedAgentID,
 		); err != nil {
 			slog.Warn("ListIssues scan failed", "error", err)
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -1052,6 +1067,7 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 	}
 	labelsMap := h.labelsByIssue(ctx, wsUUID, ids)
 	resp := make([]IssueResponse, len(issues))
+	participatedAgentEcho := echoedParticipatedAgentID(participatedAgentFilter)
 	for i, issue := range issues {
 		resp[i] = issueListRowToResponse(issue, prefix)
 		labels := labelsMap[resp[i].ID]
@@ -1059,12 +1075,17 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 			labels = []LabelResponse{}
 		}
 		resp[i].Labels = &labels
+		resp[i].ParticipatedAgentID = participatedAgentEcho
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"issues": resp,
 		"total":  total,
-	})
+	}
+	if participatedAgentEcho != nil {
+		payload["participated_agent_id"] = *participatedAgentEcho
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 type issueActorFilter struct {
@@ -1299,11 +1320,13 @@ func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
 	} else if filter != nil {
 		where = append(where, fmt.Sprintf("i.metadata @> %s::jsonb", addArg(string(filter))))
 	}
+	var participatedAgentFilter pgtype.UUID
 	if raw := r.URL.Query().Get("participated_agent_id"); raw != "" {
 		id, ok := parseUUIDOrBadRequest(w, raw, "participated_agent_id")
 		if !ok {
 			return
 		}
+		participatedAgentFilter = id
 		where = append(where, fmt.Sprintf(
 			"EXISTS (SELECT 1 FROM comment c WHERE c.issue_id = i.id AND c.author_type = 'agent' AND c.author_id = %s::uuid)",
 			addArg(id),
@@ -1594,10 +1617,14 @@ ORDER BY
 			labels = []LabelResponse{}
 		}
 		issue.Labels = &labels
+		issue.ParticipatedAgentID = echoedParticipatedAgentID(participatedAgentFilter)
 		groups[idx].Issues = append(groups[idx].Issues, issue)
 	}
 
-	writeJSON(w, http.StatusOK, GroupedIssuesResponse{Groups: groups})
+	writeJSON(w, http.StatusOK, GroupedIssuesResponse{
+		Groups:              groups,
+		ParticipatedAgentID: echoedParticipatedAgentID(participatedAgentFilter),
+	})
 }
 
 func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
