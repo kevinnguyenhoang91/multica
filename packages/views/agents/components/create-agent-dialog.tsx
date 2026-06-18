@@ -153,6 +153,7 @@ export function CreateAgentDialog({
     setCreating(true);
 
     try {
+      const trimmedInstructions = instructions.trim();
       // When duplicating, forward the hidden config fields the template
       // carries (instructions / custom_args / custom_env / mcp_config / max_concurrent_tasks)
       // so the clone is functional out of the box without the user

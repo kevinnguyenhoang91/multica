@@ -65,6 +65,10 @@ function useOptionalSidebar() {
   return React.useContext(SidebarContext)
 }
 
+function useSidebarSafe() {
+  return React.useContext(SidebarContext)
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,

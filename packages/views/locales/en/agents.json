@@ -334,6 +334,26 @@
       "saved_toast": "MCP config saved",
       "save_failed_toast": "Failed to save MCP config"
     },
+    "runtime_config": {
+      "intro": "Choose how OpenClaw runtime executes each turn for this agent. Local mode runs the agent inside the daemon process. Gateway mode forwards each turn to OpenClaw Gateway, useful when the daemon host acts as a lightweight orchestrator and heavy execution runs on stronger machines.",
+      "mode_label": "Routing mode",
+      "mode_local": "Local",
+      "mode_gateway": "Gateway",
+      "mode_local_hint": "Default. The daemon runs `openclaw agent --local ...` and the agent loop executes on this host.",
+      "mode_gateway_hint": "The daemon dials OpenClaw Gateway. Leave endpoint fields empty to inherit from `~/.openclaw/openclaw.json` on the daemon host.",
+      "gateway_legend": "Gateway endpoint",
+      "host_label": "Host",
+      "host_placeholder": "gw.internal",
+      "port_label": "Port",
+      "port_invalid": "Port must be a positive integer.",
+      "token_label": "Auth token",
+      "token_placeholder": "Bearer token issued by Gateway",
+      "token_masked_placeholder": "Saved - enter a new value to rotate; leave empty to keep existing",
+      "tls_label": "Use TLS",
+      "tls_hint": "Dial via https:// instead of http://",
+      "saved_toast": "Routing config saved",
+      "save_failed_toast": "Failed to save routing config"
+    },
     "skills": {
       "intro": "Workspace skills assigned to this agent. Local runtime skills are always available automatically.",
       "add_action": "Add skill",

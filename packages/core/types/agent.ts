@@ -236,6 +236,7 @@ export interface Agent {
   runtime_config: Record<string, unknown>;
   custom_args: string[];
   custom_env_redacted: boolean;
+  custom_env_key_count?: number;
   mcp_config: Record<string, unknown> | null;
   mcp_config_redacted: boolean;
   visibility: AgentVisibility;
