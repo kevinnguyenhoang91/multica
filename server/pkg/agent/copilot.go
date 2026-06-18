@@ -207,6 +207,7 @@ func (b *copilotBackend) Execute(ctx context.Context, prompt string, opts ExecOp
 	runCtx, cancel := runContext(ctx, timeout)
 
 	args := buildCopilotArgs(prompt, opts, b.cfg.Logger)
+	argv0, cmdArgs := chooseCopilotInvocation(execName, lookedUp, args, b.cfg.Logger)
 	var mcpConfigPath string
 	var mcpFileCleanup func()
 	if len(opts.McpConfig) > 0 {

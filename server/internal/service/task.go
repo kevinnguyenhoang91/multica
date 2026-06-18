@@ -611,12 +611,14 @@ func (s *TaskService) enqueueMentionTask(ctx context.Context, issue db.Issue, ag
 // onto the agent's Instructions, matching the behavior of issue-bound
 // tasks assigned to the squad.
 type QuickCreateContext struct {
-	Type        string `json:"type"`
-	Prompt      string `json:"prompt"`
-	RequesterID string `json:"requester_id"`
-	WorkspaceID string `json:"workspace_id"`
-	ProjectID   string `json:"project_id,omitempty"`
-	SquadID     string `json:"squad_id,omitempty"`
+	Type          string   `json:"type"`
+	Prompt        string   `json:"prompt"`
+	RequesterID   string   `json:"requester_id"`
+	WorkspaceID   string   `json:"workspace_id"`
+	ProjectID     string   `json:"project_id,omitempty"`
+	SquadID       string   `json:"squad_id,omitempty"`
+	ParentIssueID string   `json:"parent_issue_id,omitempty"`
+	AttachmentIDs []string `json:"attachment_ids,omitempty"`
 	// New tasks always set UseSandbox; the pointer preserves compatibility with
 	// older queued payloads that may omit the field.
 	UseSandbox *bool `json:"use_sandbox,omitempty"`
@@ -636,11 +638,15 @@ const QuickCreateContextType = "quick_create"
 // one). The handler is responsible for validating it belongs to the same
 // workspace before passing it in.
 //
+// parentIssueID is optional (zero-valued pgtype.UUID when the user didn't
+// open the modal from "Add sub issue"). The handler is responsible for
+// validating it belongs to the same workspace before passing it in.
+//
 // squadID is non-empty (Valid) when the user picked a squad as the actor.
 // The handler has already resolved it to the squad's leader agent for
 // agentID; the squadID hint is stamped into the task context so the daemon
 // claim handler can inject the squad-leader briefing on dispatch.
-func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, requesterID pgtype.UUID, agentID, squadID pgtype.UUID, prompt string, projectID pgtype.UUID, useSandbox bool) (db.AgentTaskQueue, error) {
+func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, requesterID pgtype.UUID, agentID, squadID pgtype.UUID, prompt string, projectID, parentIssueID pgtype.UUID, attachmentIDs []pgtype.UUID, useSandbox bool) (db.AgentTaskQueue, error) {
 	agent, err := s.Queries.GetAgent(ctx, agentID)
 	if err != nil {
 		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
@@ -663,6 +669,17 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	}
 	if squadID.Valid {
 		payload.SquadID = util.UUIDToString(squadID)
+	}
+	if parentIssueID.Valid {
+		payload.ParentIssueID = util.UUIDToString(parentIssueID)
+	}
+	if len(attachmentIDs) > 0 {
+		payload.AttachmentIDs = make([]string, 0, len(attachmentIDs))
+		for _, id := range attachmentIDs {
+			if id.Valid {
+				payload.AttachmentIDs = append(payload.AttachmentIDs, util.UUIDToString(id))
+			}
+		}
 	}
 	// UseSandbox is always non-nil for tasks created via this enqueue path.
 	// Nil only appears on legacy tasks created before use_sandbox existed.
@@ -689,6 +706,7 @@ func (s *TaskService) EnqueueQuickCreateTask(ctx context.Context, workspaceID, r
 		"requester_id", util.UUIDToString(requesterID),
 		"workspace_id", util.UUIDToString(workspaceID),
 		"project_id", payload.ProjectID,
+		"parent_issue_id", payload.ParentIssueID,
 		"use_sandbox", useSandbox,
 	)
 	// Match every other Enqueue* path: kick the daemon WS so the task

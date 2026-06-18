@@ -6,7 +6,9 @@ import {
   BookOpenText,
   FileText,
   KeyRound,
-  PlugZap,
+  ListTodo,
+  Plug,
+  Router,
   Terminal,
   Webhook,
 } from "lucide-react";
@@ -31,6 +33,9 @@ import { SkillsTab } from "./tabs/skills-tab";
 import { EnvTab } from "./tabs/env-tab";
 import { CustomArgsTab } from "./tabs/custom-args-tab";
 import { McpConfigTab } from "./tabs/mcp-config-tab";
+import { IntegrationsTab } from "./tabs/integrations-tab";
+import { RuntimeConfigTab } from "./tabs/runtime-config-tab";
+import { ActorIssuesPanel } from "../../common/actor-issues-panel";
 import { useT } from "../../i18n";
 
 export type DetailTab =
@@ -39,16 +44,17 @@ export type DetailTab =
   | "instructions"
   | "skills"
   | "env"
-  | "mcp"
-  | "custom_args";
+  | "custom_args"
+  | "mcp_config"
+  | "integrations"
+  | "runtime_config";
 
-const TAB_LABEL_KEY: Record<DetailTab, "activity" | "instructions" | "skills" | "environment" | "mcp" | "custom_args"> = {
+const TAB_LABEL_KEY: Record<DetailTab, "activity" | "tasks" | "instructions" | "skills" | "environment" | "custom_args" | "mcp_config" | "integrations" | "runtime_config"> = {
   activity: "activity",
   tasks: "tasks",
   instructions: "instructions",
   skills: "skills",
   env: "environment",
-  mcp: "mcp",
   custom_args: "custom_args",
   mcp_config: "mcp_config",
   integrations: "integrations",
@@ -64,7 +70,6 @@ const detailTabs: {
   { id: "instructions", icon: FileText },
   { id: "skills", icon: BookOpenText },
   { id: "env", icon: KeyRound },
-  { id: "mcp", icon: PlugZap },
   { id: "custom_args", icon: Terminal },
   { id: "mcp_config", icon: Plug },
   { id: "integrations", icon: Webhook },
@@ -263,21 +268,12 @@ export function AgentOverviewPane({
             />
           </TabContent>
         )}
-        {activeTab === "mcp" && (
+        {effectiveTab === "mcp_config" && (
           <TabContent>
             <McpConfigTab
               agent={agent}
               runtimeDevice={runtime ?? undefined}
               readOnly={!!agent.mcp_config_redacted}
-              onSave={(updates) => onUpdate(agent.id, updates)}
-              onDirtyChange={setActiveDirty}
-            />
-          </TabContent>
-        )}
-        {activeTab === "custom_args" && (
-          <TabContent>
-            <McpConfigTab
-              agent={agent}
               onSave={(updates) => onUpdate(agent.id, updates)}
               onDirtyChange={setActiveDirty}
             />

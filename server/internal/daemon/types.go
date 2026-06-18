@@ -46,6 +46,7 @@ type Task struct {
 	IssueID                 string                `json:"issue_id"`
 	WorkspaceID             string                `json:"workspace_id"`
 	WorkspaceContext        string                `json:"workspace_context,omitempty"`
+	ThreadName              string                `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
 	Agent                   *AgentData            `json:"agent,omitempty"`
 	Repos                   []RepoData            `json:"repos,omitempty"`
 	ProjectID               string                `json:"project_id,omitempty"`        // issue's project, when present
@@ -54,9 +55,12 @@ type Task struct {
 	PriorSessionID          string          `json:"prior_session_id,omitempty"`          // Claude session ID from a previous task on this issue
 	PriorWorkDir            string          `json:"prior_work_dir,omitempty"`            // work_dir from a previous task on this issue
 	TriggerCommentID        string          `json:"trigger_comment_id,omitempty"`        // comment that triggered this task
+	TriggerThreadID         string          `json:"trigger_thread_id,omitempty"`         // root comment ID for the triggering thread; falls back to trigger_comment_id on old servers
 	TriggerCommentContent   string          `json:"trigger_comment_content,omitempty"`   // content of the triggering comment
 	TriggerAuthorType       string          `json:"trigger_author_type,omitempty"`       // "agent" or "member" — author kind for the triggering comment
 	TriggerAuthorName       string          `json:"trigger_author_name,omitempty"`       // display name of the triggering comment author
+	NewCommentCount         int             `json:"new_comment_count,omitempty"`         // issue-wide comments since last run; excludes own + injected trigger
+	NewCommentsSince        string          `json:"new_comments_since,omitempty"`        // RFC3339 anchor used to compute NewCommentCount
 	ChatSessionID           string          `json:"chat_session_id,omitempty"`           // non-empty for chat tasks
 	ChatMessage             string          `json:"chat_message,omitempty"`              // user message content for chat tasks
 	ChatMessageAttachments  []ChatAttachmentMeta `json:"chat_message_attachments,omitempty"` // attachments linked to the chat message; agent uses these to `multica attachment download <id>`
@@ -67,9 +71,12 @@ type Task struct {
 	AutopilotSource         string          `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
 	AutopilotTriggerPayload json.RawMessage `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string          `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
+	QuickCreateAttachmentIDs []string       `json:"quick_create_attachment_ids,omitempty"` // attachments uploaded in the quick-create prompt
 	UseSandbox              *bool           `json:"use_sandbox,omitempty"`               // quick-create sandbox toggle; nil on non-quick-create tasks
 	SquadID                 string          `json:"squad_id,omitempty"`                  // when the picker was a squad, the squad's UUID; Agent is still the resolved leader
 	SquadName               string          `json:"squad_name,omitempty"`                // display name for the picker squad, used in prompt text
+	ParentIssueID           string          `json:"parent_issue_id,omitempty"`           // parent issue UUID for quick-create sub-issue tasks
+	ParentIssueIdentifier   string          `json:"parent_issue_identifier,omitempty"`   // human-readable parent issue key (e.g. MUL-123)
 	// RequestingUserName + RequestingUserProfileDescription describe the human
 	// the agent is working on behalf of. v1 sources them from the runtime
 	// owner (the user who registered the daemon). Empty when the runtime has

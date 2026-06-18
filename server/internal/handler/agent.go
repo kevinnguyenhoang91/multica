@@ -234,6 +234,7 @@ type AgentTaskResponse struct {
 	// regardless of issue / chat / autopilot / quick-create — sees the same
 	// shared context. Empty when the workspace owner hasn't set it.
 	WorkspaceContext        string                `json:"workspace_context,omitempty"`
+	ThreadName              string                `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
 	Status                  string                `json:"status"`
 	Priority                int32                 `json:"priority"`
 	DispatchedAt            *string               `json:"dispatched_at"`
@@ -254,11 +255,25 @@ type AgentTaskResponse struct {
 	PriorSessionID          string                `json:"prior_session_id,omitempty"`          // session ID from a previous task on same issue
 	PriorWorkDir            string                `json:"prior_work_dir,omitempty"`            // work_dir from a previous task on same issue
 	WorkDir                 string                `json:"work_dir,omitempty"`                  // local working directory pinned for this task; populated once the daemon reports it
+	// RelativeWorkDir is a privacy-safe display form of WorkDir intended for
+	// the UI. For standard tasks it strips the daemon's workspaces root so
+	// the user sees `<wsUUID>/<taskShort>/workdir`; for local_directory
+	// tasks the absolute path lives outside the envRoot layout, so we strip
+	// recognised home-directory prefixes (`/Users/<name>/`, `/home/<name>/`,
+	// `<drive>:/Users/<name>/`) and otherwise fall back to the basename so
+	// the field never carries the user's home dir or account name. Empty
+	// when WorkDir is empty, or when stripping leaves nothing. See
+	// relativeWorkDir() for the full rules. Older clients can still read
+	// WorkDir directly; newer UIs should prefer RelativeWorkDir.
+	RelativeWorkDir         string                `json:"relative_work_dir,omitempty"`
 	TriggerCommentID        *string               `json:"trigger_comment_id,omitempty"`        // comment that triggered this task
+	TriggerThreadID         string                `json:"trigger_thread_id,omitempty"`         // root comment ID for the triggering thread
 	TriggerCommentContent   string                `json:"trigger_comment_content,omitempty"`   // content of the triggering comment
 	TriggerSummary          *string               `json:"trigger_summary,omitempty"`           // canonical short description snapshot — comment text / autopilot title — taken at task creation; survives source edits/deletes
 	TriggerAuthorType       string                `json:"trigger_author_type,omitempty"`       // "agent" or "member" — author kind of the triggering comment
 	TriggerAuthorName       string                `json:"trigger_author_name,omitempty"`       // display name of the triggering comment author
+	NewCommentCount         int                   `json:"new_comment_count,omitempty"`         // issue-wide comments since last run; excludes injected trigger + own comments
+	NewCommentsSince        string                `json:"new_comments_since,omitempty"`        // RFC3339 anchor (last run's started_at) for new_comment_count
 	ChatSessionID           string                `json:"chat_session_id,omitempty"`           // non-empty for chat tasks
 	ChatMessage             string                `json:"chat_message,omitempty"`              // user message for chat tasks
 	ChatMessageAttachments  []ChatAttachmentMeta  `json:"chat_message_attachments,omitempty"`  // attachments on the user message — agent calls `multica attachment download <id>` per entry
@@ -269,9 +284,12 @@ type AgentTaskResponse struct {
 	AutopilotSource         string                `json:"autopilot_source,omitempty"`          // manual, schedule, webhook, or api
 	AutopilotTriggerPayload json.RawMessage       `json:"autopilot_trigger_payload,omitempty"` // optional trigger payload for webhook/api runs
 	QuickCreatePrompt       string                `json:"quick_create_prompt,omitempty"`       // user's natural-language input for quick-create tasks
+	QuickCreateAttachmentIDs []string             `json:"quick_create_attachment_ids,omitempty"` // attachment ids bound to quick-create issue creation
 	UseSandbox              *bool                 `json:"use_sandbox,omitempty"`               // quick-create sandbox toggle; nil on non-quick-create tasks
 	SquadID                 string                `json:"squad_id,omitempty"`                  // for quick-create tasks where the picker was a squad; Agent is still the resolved leader
 	SquadName               string                `json:"squad_name,omitempty"`                // display name for the picker squad
+	ParentIssueID           string                `json:"parent_issue_id,omitempty"`           // parent issue UUID for quick-create sub-issue tasks
+	ParentIssueIdentifier   string                `json:"parent_issue_identifier,omitempty"`   // parent issue key (e.g. MUL-123) for prompt context
 	// RequestingUserName + RequestingUserProfileDescription mirror the user
 	// the agent is acting on behalf of (see daemon/types.go). v1 sources them
 	// from the runtime owner so they're populated for daemon runtimes and
