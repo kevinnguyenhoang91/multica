@@ -37,22 +37,16 @@ define REQUIRE_ENV
 	fi
 endef
 
-# Self-hosting requires Docker Compose v2 (the `docker compose` CLI plugin).
+# Self-hosting requires the `docker compose` CLI plugin.
 # The self-host compose files use compose-spec syntax (top-level `name:`, no
-# `version:`) that the legacy v1 `docker-compose` standalone cannot parse, so we
+# `version:`) that the legacy standalone `docker-compose` cannot parse, so we
 # fail early with an actionable message instead of a cryptic CLI parse error
-# (e.g. "unknown shorthand flag: 'f' in -f") when the plugin is missing or v1.
+# (e.g. "unknown shorthand flag: 'f' in -f") when the plugin is missing.
 # Keep the message short and OS-agnostic: per-OS install steps belong in docs.
 define REQUIRE_COMPOSE
 	@if ! $(COMPOSE) version >/dev/null 2>&1; then \
-		echo "Docker Compose v2 ('docker compose') was not found."; \
-		echo "Self-hosting requires the Compose v2 CLI plugin; legacy 'docker-compose' v1 is not supported."; \
-		echo "Install Docker Compose from https://docs.docker.com/compose/install/ and verify with: docker compose version"; \
-		exit 1; \
-	fi; \
-	if ! $(COMPOSE) version --short 2>/dev/null | grep -Eq '^v?2\.'; then \
-		echo "'$(COMPOSE)' is not Docker Compose v2."; \
-		echo "Self-hosting requires the Compose v2 CLI plugin; legacy 'docker-compose' v1 is not supported."; \
+		echo "Docker Compose ('docker compose') was not found."; \
+		echo "Self-hosting requires the Compose CLI plugin; legacy 'docker-compose' is not supported."; \
 		echo "Install Docker Compose from https://docs.docker.com/compose/install/ and verify with: docker compose version"; \
 		exit 1; \
 	fi
