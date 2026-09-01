@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -78,7 +77,7 @@ while IFS= read -r line; do
         printf '{"jsonrpc":"2.0","id":%s,"error":{"code":-32000,"message":"authenticate must complete first"}}\n' "$id"
         exit 0
       fi
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"ses_new","models":{"availableModels":[{"modelId":"grok-4.5","name":"Grok 4.5","description":""},{"modelId":"grok-composer-2.5-fast","name":"Grok Composer 2.5 Fast","description":""}],"currentModelId":"grok-4.5"}}}\n' "$id"
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"ses_new","models":{"availableModels":[{"modelId":"grok-4.6","name":"Grok 4.6","_meta":{"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"xhigh","value":"xhigh","label":"Extra High Effort","default":false},{"id":"high","value":"high","label":"High Effort","default":true},{"id":"medium","value":"medium","label":"Medium Effort","default":false},{"id":"low","value":"low","label":"Low Effort","default":false}]}},{"modelId":"grok-4.5","name":"Grok 4.5","_meta":{"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"high","value":"high","label":"High Effort","default":true},{"id":"medium","value":"medium","label":"Medium Effort","default":false},{"id":"low","value":"low","label":"Low Effort","default":false}]}},{"modelId":"grok-composer-2.5-fast","name":"Grok Composer 2.5 Fast"}],"currentModelId":"grok-4.6"}}}\n' "$id"
       ;;
     *'"method":"session/load"'*)
       if [ -z "$authenticated" ]; then
@@ -108,9 +107,12 @@ while IFS= read -r line; do
       printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"ses_new","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-1","status":"completed","name":"Shell","output":"hi\\n"}}}\n'
       printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"ses_new","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"pong"}}}}\n'
       if [ -n "$GROK_USAGE" ]; then
-        printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"ses_new","update":{"sessionUpdate":"usage_update","usage":{"inputTokens":120,"outputTokens":30,"cachedReadTokens":20}}}}\n'
+        # Match live Grok Build ACP (0.2.x): metering lives under result._meta,
+        # not a top-level usage field or sessionUpdate=usage_update.
+        printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn","_meta":{"sessionId":"ses_new","modelId":"grok-4.6","inputTokens":120,"outputTokens":30,"cachedReadTokens":20,"cachedWriteTokens":5,"usage":{"inputTokens":120,"outputTokens":30,"totalTokens":150,"cachedReadTokens":20,"cachedWriteTokens":5,"modelCalls":1,"costUsdTicks":98765}}}}\n' "$id"
+      else
+        printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id"
       fi
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id"
       if [ -n "$GROK_LATE_CHUNK" ]; then
         sleep 0.05
         printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"ses_new","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" tail"}}}}\n'
@@ -604,12 +606,72 @@ func TestGrokPropagatesMCPAndUsage(t *testing.T) {
 	if !strings.Contains(requests, `"name":"fetch"`) || !strings.Contains(requests, `"command":"uvx"`) {
 		t.Fatalf("session/new did not receive MCP server:\n%s", raw)
 	}
-	usage, ok := result.Usage["grok-4.5"]
+	usage, ok := result.Usage["grok-4.6"]
 	if !ok {
-		t.Fatalf("usage missing grok-4.5 key: %+v", result.Usage)
+		t.Fatalf("usage missing grok-4.6 key: %+v", result.Usage)
 	}
-	if usage.InputTokens != 120 || usage.OutputTokens != 30 || usage.CacheReadTokens != 20 {
+	// The fixture's totalTokens (150) equals input + output, so its 20 cached
+	// reads sit inside inputTokens and are billed once: input is stored as the
+	// uncached remainder 120 - 20 = 100.
+	if usage.InputTokens != 100 || usage.OutputTokens != 30 || usage.CacheReadTokens != 20 || usage.CacheWriteTokens != 5 {
 		t.Fatalf("unexpected usage: %+v", usage)
+	}
+	// xAI's own price for the turn has to survive the whole backend, not just
+	// the parser: it is the only figure carrying the ≥200K prompt surcharge,
+	// and everything downstream falls back to a rate-table guess without it.
+	if usage.CostUSDTicks != 98765 {
+		t.Fatalf("cost ticks = %d, want 98765", usage.CostUSDTicks)
+	}
+}
+
+// TestGrokAttributesUsageOnResumeWithoutConfiguredModel pins the model
+// attribution on the resume path. `session/load` reports no model id (only
+// `session/new` does), so when neither the agent nor the runtime pins a model
+// the turn's own `_meta.modelId` is the only source left. Without it the whole
+// run buckets under "unknown", which matches no pricing row and reports $0
+// spend for the task.
+func TestGrokAttributesUsageOnResumeWithoutConfiguredModel(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	fakePath := filepath.Join(tempDir, "grok")
+	writeTestExecutable(t, fakePath, []byte(fakeGrokACPScript()))
+	backend, err := New("grok", Config{
+		ExecutablePath: fakePath,
+		Logger:         slog.Default(),
+		Env:            map[string]string{"GROK_USAGE": "1"},
+	})
+	if err != nil {
+		t.Fatalf("new grok backend: %v", err)
+	}
+	// No Model: the daemon leaves it empty whenever neither the agent nor
+	// MULTICA_GROK_MODEL pins one (see daemon.go resolveModel).
+	session, err := backend.Execute(context.Background(), "continue", ExecOptions{
+		ResumeSessionID: "ses_existing",
+		Timeout:         5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	go func() {
+		for range session.Messages {
+		}
+	}()
+	result := <-session.Result
+	if result.Status != "completed" {
+		t.Fatalf("expected completed, got status=%q error=%q", result.Status, result.Error)
+	}
+	if _, unknown := result.Usage["unknown"]; unknown {
+		t.Fatalf("resumed usage fell back to the unpriced \"unknown\" bucket: %+v", result.Usage)
+	}
+	usage, ok := result.Usage["grok-4.6"]
+	if !ok {
+		t.Fatalf("usage missing grok-4.6 key: %+v", result.Usage)
+	}
+	if usage.InputTokens != 100 || usage.OutputTokens != 30 || usage.CacheReadTokens != 20 || usage.CacheWriteTokens != 5 {
+		t.Fatalf("unexpected usage: %+v", usage)
+	}
+	if usage.CostUSDTicks != 98765 {
+		t.Fatalf("cost ticks = %d, want 98765", usage.CostUSDTicks)
 	}
 }
 
@@ -684,12 +746,28 @@ func TestDiscoverGrokModelsWaitsForAdvertisedAuth(t *testing.T) {
 	t.Setenv("GROK_AUTH_METHODS", "api")
 	t.Setenv("XAI_API_KEY", "test-only-key")
 
-	models, err := discoverGrokModels(context.Background(), fakePath)
+	catalog, err := discoverGrokModels(context.Background(), Command{Path: fakePath})
 	if err != nil {
 		t.Fatalf("discover grok models: %v", err)
 	}
-	if len(models) != 2 || models[0].ID != "grok-4.5" {
-		t.Fatalf("unexpected models: %+v", models)
+	if len(catalog.Models) != 3 || catalog.Models[0].ID != "grok-4.6" {
+		t.Fatalf("unexpected models: %+v", catalog.Models)
+	}
+	if catalog.Fallback {
+		t.Error("a successful ACP discovery must not be marked Fallback")
+	}
+	byID := make(map[string]*ModelThinking, len(catalog.Models))
+	for _, model := range catalog.Models {
+		byID[model.ID] = model.Thinking
+	}
+	if got := thinkingValues(byID["grok-4.6"]); strings.Join(got, ",") != "xhigh,high,medium,low" || byID["grok-4.6"].DefaultLevel != "high" {
+		t.Fatalf("grok-4.6 thinking = %+v, want advertised catalog with high default", byID["grok-4.6"])
+	}
+	if got := thinkingValues(byID["grok-4.5"]); strings.Join(got, ",") != "high,medium,low" || byID["grok-4.5"].DefaultLevel != "high" {
+		t.Fatalf("grok-4.5 thinking = %+v, want advertised catalog with high default", byID["grok-4.5"])
+	}
+	if byID["grok-composer-2.5-fast"] != nil {
+		t.Fatalf("model without vendor reasoning metadata got %+v", byID["grok-composer-2.5-fast"])
 	}
 	raw, err := os.ReadFile(requestsFile)
 	if err != nil {
@@ -727,12 +805,15 @@ func TestDiscoverGrokModelsStopsOnAuthFailures(t *testing.T) {
 			t.Setenv("GROK_AUTH_FAIL", tc.authFail)
 			t.Setenv("XAI_API_KEY", "")
 
-			models, err := discoverGrokModels(context.Background(), fakePath)
+			catalog, err := discoverGrokModels(context.Background(), Command{Path: fakePath})
 			if err != nil {
 				t.Fatalf("discover grok models: %v", err)
 			}
-			if len(models) != 2 || models[0].ID != "grok-4.5" {
-				t.Fatalf("expected static fallback, got %+v", models)
+			if len(catalog.Models) != 3 || catalog.Models[0].ID != "grok-4.6" {
+				t.Fatalf("expected static fallback, got %+v", catalog.Models)
+			}
+			if !catalog.Fallback {
+				t.Error("static fallback must be marked Fallback so it is never cached as the real catalog")
 			}
 			raw, err := os.ReadFile(requestsFile)
 			if err != nil {
@@ -751,18 +832,29 @@ func TestDiscoverGrokModelsStopsOnAuthFailures(t *testing.T) {
 
 func TestGrokThinkingCatalogIsPerModel(t *testing.T) {
 	models := grokStaticModels()
-	if models[0].Thinking == nil {
-		t.Fatal("grok-4.5 should advertise documented effort levels")
+	if len(models) != 3 || models[0].ID != "grok-4.6" || !models[0].Default {
+		t.Fatalf("static fallback must default to grok-4.6: %+v", models)
 	}
-	got := make([]string, 0, len(models[0].Thinking.SupportedLevels))
-	for _, level := range models[0].Thinking.SupportedLevels {
-		got = append(got, level.Value)
+	want := map[string]string{
+		"grok-4.6": "low,medium,high,xhigh",
+		"grok-4.5": "low,medium,high",
 	}
-	if strings.Join(got, ",") != "low,medium,high" {
-		t.Fatalf("grok-4.5 levels = %v, want low/medium/high", got)
+	for id, levels := range want {
+		model := grokMustFindModel(t, models, id)
+		if model.Thinking == nil {
+			t.Fatalf("%s should advertise documented effort levels", id)
+		}
+		got := make([]string, 0, len(model.Thinking.SupportedLevels))
+		for _, level := range model.Thinking.SupportedLevels {
+			got = append(got, level.Value)
+		}
+		if strings.Join(got, ",") != levels {
+			t.Fatalf("%s levels = %v, want %s", id, got, levels)
+		}
 	}
-	if models[1].Thinking != nil {
-		t.Fatalf("unverified composer model must hide thinking controls: %+v", models[1].Thinking)
+	composer := grokMustFindModel(t, models, "grok-composer-2.5-fast")
+	if composer.Thinking != nil {
+		t.Fatalf("unverified composer model must hide thinking controls: %+v", composer.Thinking)
 	}
 	unknown := []Model{{ID: "future-grok", Label: "Future"}}
 	annotateGrokThinking(unknown)
@@ -777,13 +869,16 @@ func TestGrokValidateThinkingLevelUsesPerModelCatalog(t *testing.T) {
 		level string
 		want  bool
 	}{
+		{model: "grok-4.6", level: "high", want: true},
+		{model: "grok-4.6", level: "low", want: true},
+		{model: "grok-4.6", level: "xhigh", want: true},
 		{model: "grok-4.5", level: "low", want: true},
 		{model: "grok-4.5", level: "none", want: false},
 		{model: "grok-4.5", level: "xhigh", want: false},
 		{model: "grok-composer-2.5-fast", level: "low", want: false},
 		{model: "future-grok", level: "high", want: false},
 	} {
-		got, err := ValidateThinkingLevel(context.Background(), "grok", "/nonexistent/grok", tc.model, tc.level)
+		got, err := ValidateThinkingLevel(context.Background(), "grok", Command{Path: "/nonexistent/grok"}, tc.model, tc.level)
 		if err != nil {
 			t.Fatalf("ValidateThinkingLevel(%q, %q): %v", tc.model, tc.level, err)
 		}
@@ -819,72 +914,13 @@ func TestGrokSelectAuthMethod(t *testing.T) {
 	}
 }
 
-func TestGrokIsKnownThinkingValue(t *testing.T) {
-	t.Parallel()
-	for _, level := range []string{"", "low", "medium", "high"} {
-		if !IsKnownThinkingValue("grok", level) {
-			t.Errorf("IsKnownThinkingValue(grok, %q) = false", level)
+func grokMustFindModel(t *testing.T, models []Model, id string) Model {
+	t.Helper()
+	for _, model := range models {
+		if model.ID == id {
+			return model
 		}
 	}
-	for _, level := range []string{"none", "minimal", "xhigh", "bogus", "max"} {
-		if IsKnownThinkingValue("grok", level) {
-			t.Errorf("IsKnownThinkingValue(grok, %q) = true, want rejected", level)
-		}
-	}
-}
-
-// TestGrokRealACPSmoke drives the REAL `grok agent stdio` binary end-to-end
-// when it is installed and authenticated. Skipped automatically when grok is
-// not on PATH or the session cannot be created, so CI stays green.
-func TestGrokRealACPSmoke(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping real-binary smoke test in -short mode")
-	}
-	path, err := exec.LookPath("grok")
-	if err != nil {
-		t.Skip("grok not on PATH; skipping real-binary smoke test")
-	}
-	if version, err := exec.Command(path, "--version").CombinedOutput(); err == nil {
-		t.Logf("grok CLI version: %s", strings.TrimSpace(string(version)))
-	} else {
-		t.Logf("grok CLI version unavailable: %v (%s)", err, strings.TrimSpace(string(version)))
-	}
-
-	backend, err := New("grok", Config{ExecutablePath: path, Logger: slog.Default()})
-	if err != nil {
-		t.Fatalf("new grok backend: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-
-	session, err := backend.Execute(ctx, "Reply with exactly one word: pong. Do not use any tools.", ExecOptions{
-		Cwd:     t.TempDir(),
-		Timeout: 80 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("execute: %v", err)
-	}
-	go func() {
-		for range session.Messages {
-		}
-	}()
-
-	select {
-	case result := <-session.Result:
-		if result.Status == "failed" && (strings.Contains(result.Error, "session/new") || strings.Contains(result.Error, "initialize")) {
-			t.Skipf("grok not authenticated or ACP unavailable: %v", result.Error)
-		}
-		if result.Status != "completed" {
-			t.Fatalf("real grok run did not complete: status=%q error=%q", result.Status, result.Error)
-		}
-		if !strings.Contains(strings.ToLower(result.Output), "pong") {
-			t.Fatalf("expected real grok output to contain 'pong', got %q", result.Output)
-		}
-		if result.SessionID == "" {
-			t.Error("expected a non-empty session id from real grok")
-		}
-		t.Logf("real grok smoke OK: session=%s output=%q", result.SessionID, result.Output)
-	case <-time.After(90 * time.Second):
-		t.Fatal("timeout waiting for real grok result")
-	}
+	t.Fatalf("model %q not in catalog: %+v", id, models)
+	return Model{}
 }

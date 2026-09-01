@@ -1,6 +1,6 @@
 ---
 name: multica-squads
-description: "Use when creating, inspecting, updating, assigning, mentioning, or debugging Multica squads. Explains what squads are, squad/member fields, CLI commands, leader routing, issue assignment, comments, mentions, autopilot behavior, leader briefing, side effects, and product-gap handling."
+description: "Use when creating, inspecting, updating, assigning to, or debugging a Multica squad, including how leader routing picks who runs."
 user-invocable: false
 allowed-tools: Bash(multica *)
 ---
@@ -15,8 +15,11 @@ If debugging why a squad did or did not run, inspect first:
 multica issue get <issue-id> --output json
 multica squad get <squad-id> --output json
 multica squad member list <squad-id> --output json
-multica issue comment list <issue-id> --recent 10 --output json
+multica issue comment list <issue-id> --roots-only --summary --output json
+multica issue comment list <issue-id> --thread <thread-id> --tail 30 --output json
 ```
+
+The two comment reads are a sequence: scan the roots first, then open the threads that look relevant — mention triggers, failure reasons, and user instructions usually live in the replies, which the roots scan never returns.
 
 If the command shape is unclear, check help instead of guessing:
 
@@ -75,14 +78,31 @@ multica squad activity <issue-id> action|no_action|failed --reason "<why>" --out
 `activity` is a write: it records the leader's evaluation decision on an issue.
 Use it only when acting as the squad leader after evaluating a trigger.
 
+Which issue it accepts: **the issue your current turn is running on**. The
+target issue does NOT need to be assigned to your squad — a `@squad` mention on
+an issue owned by an individual agent, or a leader task bound to a child issue,
+all record fine. What the server checks is your task row (`is_leader_task` plus
+a stamped `squad_id`), not the issue's assignee. A leader woken by a stage
+barrier runs on the PARENT issue, so record against the parent, not the child
+you just read; passing an unrelated issue id is rejected and the error names the
+issue you should have used.
+
+If the call fails, do not exit silently — the comment prohibition on `no_action`
+only applies once the recording succeeded. Post one short comment with the
+outcome instead, and only when this turn has not already commented: on the
+`action` path your delegation comment is already that record.
+
 Issue/comment commands often needed with squads:
 
 ```bash
 multica issue get <issue-id> --output json
 multica issue update <issue-id> --help
-multica issue comment list <issue-id> --output json
+multica issue comment list <issue-id> --roots-only --summary --output json
 multica issue comment add <issue-id> --help
 ```
+
+Comment reads stay bounded — the scan-then-expand sequence from the quick
+start above — never one unbounded `issue comment list` pull.
 
 Prefer `--output json` for reads. Use `--help` before writes.
 
@@ -161,7 +181,22 @@ Current behavior:
 - assignment while status is `backlog` does not immediately start work;
 - moving a squad-assigned issue out of `backlog` can trigger the leader;
 - changing assignee cancels existing tasks for the issue before enqueueing the
-  new assignee path.
+  new assignee path;
+- parent issue status is agent-managed (same model as direct agent assignment):
+  the leader's first assignment turn should move the parent to `in_progress`
+  and keep it there while members work; the leader moves the parent to
+  `in_review` only when a later re-trigger confirms the overall goal is met.
+  Completing a leader `task` (including the first dispatch) does not itself
+  change issue status;
+- that status authority is granted only when the issue's `assignee_type` /
+  `assignee_id` point at THIS squad. The leader briefing is injected on every
+  leader path, including an `@squad` mention on an issue owned by a plain agent
+  — on those paths the protocol instead carries an explicit "do not change this
+  issue's status".
+
+The status names above are category rules: a workspace may define custom
+statuses beyond the built-ins, and each one inherits its category's behavior in
+full (the runtime brief lists the workspace catalog when any exist).
 
 Assignment validation rejects a missing type/id pair, non-existent squad,
 archived squad, archived leader, and private leader when the actor cannot access
@@ -245,6 +280,13 @@ authorizes them.
 - `description` is not proven runtime prompt content.
 - `role` is roster context, not automatic scheduling.
 - Backlog assignment does not immediately start work.
+- First leader dispatch is not parent completion — parent stays `in_progress`
+  until the leader later confirms the overall goal and moves it to `in_review`.
+- The server does not auto-flip parent status when child issues finish; it only
+  wakes the leader with an explicit ask (including `in_review` when wrapping up).
+- Getting the leader briefing does NOT imply status authority. A squad
+  `@`-mentioned into an issue assigned to someone else is a guest: roster and
+  delegation rules yes, `multica issue status` no.
 
 ## References
 

@@ -102,6 +102,92 @@ describe("MachineCliSection", () => {
     });
   });
 
+  it("does not update through a private teammate-owned runtime for an admin", () => {
+    const offline = runtime({
+      id: "offline-other-user",
+      owner_id: "user-2",
+      status: "offline",
+    });
+    const online = runtime({
+      id: "online-other-user",
+      owner_id: "user-2",
+    });
+
+    render(
+      <MachineCliSection
+        machine={machine([offline, online])}
+        currentUserId="user-1"
+        canManagePublicRuntimes
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Update" }),
+    ).not.toBeInTheDocument();
+    expect(mockUpdateSection).toHaveBeenCalledWith({
+      runtimeId: null,
+      currentVersion: "0.3.17",
+      isOnline: false,
+      launchedBy: null,
+    });
+  });
+
+  it("updates through an online public teammate-owned runtime for an admin", () => {
+    const offline = runtime({
+      id: "offline-other-user",
+      owner_id: "user-2",
+      status: "offline",
+      visibility: "public",
+    });
+    const online = runtime({
+      id: "online-other-user",
+      owner_id: "user-2",
+      visibility: "public",
+    });
+
+    render(
+      <MachineCliSection
+        machine={machine([offline, online])}
+        currentUserId="user-1"
+        canManagePublicRuntimes
+      />,
+    );
+
+    expect(screen.getAllByRole("button", { name: "Update" })).toHaveLength(1);
+    expect(mockUpdateSection).toHaveBeenCalledWith({
+      runtimeId: "online-other-user",
+      currentVersion: "0.3.17",
+      isOnline: true,
+      launchedBy: null,
+    });
+  });
+
+  it("does not update through a public teammate-owned runtime for a member", () => {
+    const online = runtime({
+      id: "online-other-user",
+      owner_id: "user-2",
+      visibility: "public",
+    });
+
+    render(
+      <MachineCliSection
+        machine={machine([online])}
+        currentUserId="user-1"
+        canManagePublicRuntimes={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Update" }),
+    ).not.toBeInTheDocument();
+    expect(mockUpdateSection).toHaveBeenCalledWith({
+      runtimeId: null,
+      currentVersion: "0.3.17",
+      isOnline: false,
+      launchedBy: null,
+    });
+  });
+
   it("shows read-only machine CLI status when the viewer owns no runtime", () => {
     render(
       <MachineCliSection
