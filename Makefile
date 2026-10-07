@@ -42,25 +42,17 @@ endef
 
 # Self-hosting requires the Docker Compose CLI plugin (`docker compose`).
 # The self-host compose files use compose-spec syntax (top-level `name:`, no
-# `version:`) that the legacy v1 `docker-compose` standalone cannot parse, so we
+# `version:`) that the legacy standalone `docker-compose` cannot parse, so we
 # fail early with an actionable message instead of a cryptic CLI parse error
-# (e.g. "unknown shorthand flag: 'f' in -f") when the plugin is missing or v1.
+# (e.g. "unknown shorthand flag: 'f' in -f") when the plugin is missing.
 # Keep the message short and OS-agnostic: per-OS install steps belong in docs.
 define REQUIRE_COMPOSE
-	@if ! compose_version=$$($(COMPOSE) version --short 2>/dev/null); then \
+	@if ! $(COMPOSE) version >/dev/null 2>&1; then \
 		echo "Docker Compose ('docker compose') was not found."; \
-		echo "Self-hosting requires the Compose CLI plugin; legacy 'docker-compose' v1 is not supported."; \
+		echo "Self-hosting requires the Compose CLI plugin; legacy 'docker-compose' is not supported."; \
 		echo "Install Docker Compose from https://docs.docker.com/compose/install/ and verify with: docker compose version"; \
 		exit 1; \
-	fi; \
-	case "$$compose_version" in \
-		1.*|v1.*) \
-			echo "'$(COMPOSE)' is legacy Docker Compose v1 ($$compose_version)."; \
-			echo "Self-hosting requires the Compose CLI plugin; legacy 'docker-compose' v1 is not supported."; \
-			echo "Install Docker Compose from https://docs.docker.com/compose/install/ and verify with: docker compose version"; \
-			exit 1; \
-			;; \
-	esac
+	fi
 endef
 
 # Default target changed from selfhost to help: bare `make` now prints this help
@@ -87,6 +79,7 @@ selfhost: ## Create .env if needed, then pull and start the official self-hosted
 		JWT=$$(openssl rand -hex 32); \
 		PGPASS=$$(openssl rand -hex 24); \
 		VCSKEY=$$(openssl rand -base64 32); \
+		TELEGRAMKEY=$$(openssl rand -base64 32); \
 		if [ "$$(uname)" = "Darwin" ]; then \
 			sed -i '' "s/^JWT_SECRET=.*/JWT_SECRET=$$JWT/" .env; \
 			sed -i '' "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$PGPASS/" .env; \
@@ -98,7 +91,8 @@ selfhost: ## Create .env if needed, then pull and start the official self-hosted
 			sed -i -E "s#^(DATABASE_URL=postgres://[^:]+:)[^@]*(@.*)#\1$$PGPASS\2#" .env; \
 			sed -i "s#^MULTICA_VCS_SECRET_KEY=.*#MULTICA_VCS_SECRET_KEY=$$VCSKEY#" .env; \
 		fi; \
-		echo "==> Generated random JWT_SECRET, POSTGRES_PASSWORD, and MULTICA_VCS_SECRET_KEY"; \
+		sed -i '' "s#^MULTICA_TELEGRAM_SECRET_KEY=.*#MULTICA_TELEGRAM_SECRET_KEY=$$TELEGRAMKEY#" .env; \
+		echo "==> Generated random JWT_SECRET, POSTGRES_PASSWORD, MULTICA_TELEGRAM_SECRET_KEY, and MULTICA_VCS_SECRET_KEY"; \
 	fi
 	@echo "==> Pulling official Multica images..."
 	@if ! $(COMPOSE) -f docker-compose.selfhost.yml pull; then \
@@ -120,6 +114,7 @@ selfhost-build: ## Build backend/web from the current checkout and start the sel
 		JWT=$$(openssl rand -hex 32); \
 		PGPASS=$$(openssl rand -hex 24); \
 		VCSKEY=$$(openssl rand -base64 32); \
+		TELEGRAMKEY=$$(openssl rand -base64 32); \
 		if [ "$$(uname)" = "Darwin" ]; then \
 			sed -i '' "s/^JWT_SECRET=.*/JWT_SECRET=$$JWT/" .env; \
 			sed -i '' "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$PGPASS/" .env; \
@@ -131,7 +126,8 @@ selfhost-build: ## Build backend/web from the current checkout and start the sel
 			sed -i -E "s#^(DATABASE_URL=postgres://[^:]+:)[^@]*(@.*)#\1$$PGPASS\2#" .env; \
 			sed -i "s#^MULTICA_VCS_SECRET_KEY=.*#MULTICA_VCS_SECRET_KEY=$$VCSKEY#" .env; \
 		fi; \
-		echo "==> Generated random JWT_SECRET, POSTGRES_PASSWORD, and MULTICA_VCS_SECRET_KEY"; \
+		sed -i "s#^MULTICA_TELEGRAM_SECRET_KEY=.*#MULTICA_TELEGRAM_SECRET_KEY=$$TELEGRAMKEY#" .env; \
+		echo "==> Generated random JWT_SECRET, POSTGRES_PASSWORD, MULTICA_TELEGRAM_SECRET_KEY, and MULTICA_VCS_SECRET_KEY"; \
 	fi
 	@echo "==> Building Multica from the current checkout..."
 	$(COMPOSE) -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build
